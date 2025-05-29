@@ -60,7 +60,8 @@ GRANT USAGE ON SCHEMA app_schema TO guest_db;
     Например, Азия, Европа, Северная Америка и т. д. 
     Это статическая таблица, которая не изменяется со временем.
     Она позволяет связать каждый производитель автомобилей с его континентом. */
-CREATE TABLE IF NOT EXISTS app_schema.continents
+CREATE TABLE 
+IF NOT EXISTS app_schema.continents
 (
     continent_id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL
@@ -141,8 +142,23 @@ CREATE TABLE IF NOT EXISTS app_schema.clients
     patronymic VARCHAR(255) NOT NULL,
     birth_date DATE NOT NULL,
     city VARCHAR(255) NOT NULL,
+    phone VARCHAR(255) NOT NULL,
 
     FOREIGN KEY (user_id) REFERENCES user_schema.users(user_id)
+);
+
+-- Таблица должность
+/*  Данная таблица предназначена для хранения данных о должностях в компании.
+    Она содержит информацию о должностях, таких как название должности.
+    Она является динамической таблицей, изменяющейся со временем.
+    Она предназначена для хранения информации о всех должностях в компании,
+    а также для хранения информации о названии каждой должности.
+    Она является важной составляющей системы, так как позволяет связать каждую должность
+    с ее данными, а также с данными о сотрудниках, которые работают в данной должности. */
+CREATE TABLE IF NOT EXISTS app_schema.positions
+(
+    position_id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL
 );
 
 -- Таблица Сотрудники.
@@ -296,6 +312,8 @@ CREATE TABLE IF NOT EXISTS mechanic_schema.repair_orders
 (
     order_id SERIAL PRIMARY KEY,
     vehicle_id INTEGER NOT NULL,
+    created_by VARCHAR(255) NOT NULL,
+    assigned_to VARCHAR(255) NOT NULL,
     opened_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     closed_at TIMESTAMP DEFAULT,
     status INTEGER NOT NULL,
@@ -355,7 +373,7 @@ CREATE TABLE IF NOT EXISTS app_schema.test_drives
     client_id INTEGER NOT NULL,
     scheduled_by INTEGER NOT NULL,
     scheduled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    actual_at TIMESTAMP DEFAULT NULL,
+    actual_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     FOREIGN KEY (vehicle_id) REFERENCES app_schema.vehicles(vehicle_id),
     FOREIGN KEY (client_id) REFERENCES app_schema.clients(client_id),
@@ -376,7 +394,6 @@ CREATE TABLE IF NOT EXISTS admin_schema.ownership_history
     vehicle_id INTEGER NOT NULL,
     client_id INTEGER NOT NULL,
     from_date DATE NOT NULL,
-    to_date DATE NOT NULL,
 
     FOREIGN KEY (vehicle_id) REFERENCES app_schema.vehicles(vehicle_id),
     FOREIGN KEY (client_id) REFERENCES app_schema.clients(client_id)
@@ -428,14 +445,15 @@ CREATE TABLE IF NOT EXISTS employee_schema.contracts
     employee_id INTEGER NOT NULL,
     type_id INTEGER NOT NULL,
     payment_id INTEGER NOT NULL,
-    contract_date DATE NOT NULL,
+    history_id INTEGER NOT NULL,
     total_price DECIMAL(10, 2) NOT NULL,
 
     FOREIGN KEY (vehicle_id) REFERENCES app_schema.vehicles(vehicle_id),
     FOREIGN KEY (client_id) REFERENCES app_schema.clients(client_id),
     FOREIGN KEY (employee_id) REFERENCES employee_schema.employees(employee_id),
     FOREIGN KEY (type_id) REFERENCES employee_schema.contract_types(type_contract_id),
-    FOREIGN KEY (payment_id) REFERENCES employee_schema.payment_types(payment_id)  
+    FOREIGN KEY (payment_id) REFERENCES employee_schema.payment_types(payment_id),
+    FOREIGN KEY (history_id) REFERENCES employee_schema.history_owners(history_id)
 );
 
 -- Таблица паспортов.
@@ -493,27 +511,28 @@ GRANT SELECT, INSERT, UPDATE ON admin_schema.ownership_history TO admin_db;
 -- Процедура: app_schema.select_continent(p_continent_id INTEGER)
 /*  Функция: Создает запрос на выборку названия континента
     по его идентификатору.
-    Она возвращает таблицу, содержащую название континента.
-    Она является read-only и не изменяет данные в таблице.
-    Она используется для получения названия континента
-    в других частях системы. */
-CREATE OR REPLACE FUNCTION app_schema.select_continent(p_continent_id INTEGER)
-RETURNS TABLE (name VARCHAR(255)) AS $$
+    Она принимает идентификатор континента в качестве параметра.
+    Она используется для получения названия континента по его идентификатору.
+*/
+CREATE OR REPLACE 
+PROCEDURE app_schema.select_continent(p_continent_id INTEGER)
+AS $$
 BEGIN
-    RETURN QUERY 
     SELECT name 
     FROM app_schema.continents 
     WHERE continent_id = p_continent_id;
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: SELECT * FROM app_schema.select_continent(1);
+-- Вызов: CALL app_schema.select_continent(1);
 
 -- Процедура: app_schema.insert_continent(p_name VARCHAR(255))
 /*  Функция: Создает запрос на вставку нового континента в таблицу.
     Она принимает название континента в качестве параметра.
-    Она используется для добавления нового континента в систему. */
-CREATE OR REPLACE FUNCTION app_schema.insert_continent(p_name VARCHAR(255))
-RETURNS VOID AS $$
+    Она используется для добавления нового континента в систему. 
+*/
+CREATE OR REPLACE 
+PROCEDURE app_schema.insert_continent(p_name VARCHAR(255))
+AS $$
 BEGIN
     INSERT INTO app_schema.continents(name) 
     VALUES(p_name);
@@ -524,23 +543,27 @@ $$ LANGUAGE plpgsql;
 -- Процедура: app_schema.update_continent(p_continent_id INTEGER, p_name VARCHAR(255))
 /*  Функция: Создает запрос на обновление названия континента в таблице.
     Она принимает идентификатор континента и новое название в качестве параметров.
-    Она используется для обновления названия континента в системе. */
-CREATE OR REPLACE FUNCTION app_schema.update_continent(p_continent_id INTEGER, p_name VARCHAR(255))
-RETURNS VOID AS $$
+    Она используется для обновления названия континента в системе. 
+*/
+CREATE OR REPLACE
+PROCEDURE app_schema.update_continent(p_continent_id INTEGER, p_name VARCHAR(255))
+AS $$
 BEGIN
     UPDATE app_schema.continents 
     SET name = p_name 
     WHERE continent_id = p_continent_id;
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: CALL app_schema.update_continent(1, 'Asia');
+-- Вызов: CALL app_schema.update_continent(1, 'North America');
 
 -- Процедура: app_schema.delete_continent(p_continent_id INTEGER)
 /*  Функция: Создает запрос на удаление континента из таблицы.
     Она принимает идентификатор континента в качестве параметра.
-    Она используется для удаления континента из системы. */
-CREATE OR REPLACE FUNCTION app_schema.delete_continent(p_continent_id INTEGER)
-RETURNS VOID AS $$
+    Она используется для удаления континента из системы. 
+*/
+CREATE OR REPLACE
+PROCEDURE app_schema.delete_continent(p_continent_id INTEGER)
+AS $$
 BEGIN
     DELETE FROM app_schema.continents 
     WHERE continent_id = p_continent_id;
@@ -549,56 +572,61 @@ $$ LANGUAGE plpgsql;
 -- Вызов: CALL app_schema.delete_continent(1);
 
 -- Процедура: app_schema.select_brand(p_brand_id INTEGER)
-/*  Функция: Создает запрос на выборку названия марки
+/*  Функция: Создает запрос на выборку названия марок авто
     по его идентификатору.
-    Она возвращает таблицу, содержащую название марки.
-    Она является read-only и не изменяет данные в таблице.
-    Она используется для получения названия марки
-    в других частях системы. */
-CREATE OR REPLACE FUNCTION app_schema.select_brand(p_brand_id INTEGER)
-RETURNS TABLE (name VARCHAR(255)) AS $$
+    Она принимает идентификатор марки в качестве параметра.
+    Она используется для получения названия марки по его идентификатору.
+*/
+CREATE OR REPLACE 
+PROCEDURE app_schema.select_brand(p_brand_id INTEGER)
+AS $$
 BEGIN
-    RETURN QUERY 
     SELECT name 
     FROM app_schema.brands 
     WHERE brand_id = p_brand_id;
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: SELECT * FROM app_schema.select_brand(1);
+-- Вызов: CALL app_schema.select_brand(1);
 
 -- Процедура: app_schema.insert_brand(p_name VARCHAR(255), p_continent_id INTEGER)
 /*  Функция: Создает запрос на вставку новой марки в таблицу.
     Она принимает название марки и идентификатор континента в качестве параметров.
-    Она используется для добавления новой марки в систему. */
-CREATE OR REPLACE FUNCTION app_schema.insert_brand(p_name VARCHAR(255), p_continent_id INTEGER)
-RETURNS VOID AS $$
+    Она используется для добавления новой марки в систему. 
+*/
+CREATE OR REPLACE
+PROCEDURE app_schema.insert_brand(p_name VARCHAR(255), p_continent_id INTEGER)
+AS $$
 BEGIN
     INSERT INTO app_schema.brands(name, continent_id) 
     VALUES(p_name, p_continent_id);
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: CALL app_schema.insert_brand('BMW', 1);
+-- Вызов: CALL app_schema.insert_brand('Toyota', 1);
 
 -- Процедура: app_schema.update_brand(p_brand_id INTEGER, p_name VARCHAR(255), p_continent_id INTEGER)
 /*  Функция: Создает запрос на обновление названия марки и континента в таблице.
     Она принимает идентификатор марки, новое название и идентификатор континента в качестве параметров.
-    Она используется для обновления названия марки и континента в системе. */
-CREATE OR REPLACE FUNCTION app_schema.update_brand(p_brand_id INTEGER, p_name VARCHAR(255), p_continent_id INTEGER)
-RETURNS VOID AS $$
+    Она используется для обновления названия марки и континента в системе. 
+*/
+CREATE OR REPLACE 
+PROCEDURE app_schema.update_brand(p_brand_id INTEGER, p_name VARCHAR(255), p_continent_id INTEGER)
+AS $$
 BEGIN
     UPDATE app_schema.brands 
     SET name = p_name, continent_id = p_continent_id 
     WHERE brand_id = p_brand_id;
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: CALL app_schema.update_brand(1, 'Toyota', 1);
+-- Вызов: CALL app_schema.update_brand(1, 'Honda', 1);
 
 -- Процедура: app_schema.delete_brand(p_brand_id INTEGER)
 /*  Функция: Создает запрос на удаление марки из таблицы.
     Она принимает идентификатор марки в качестве параметра.
-    Она используется для удаления марки из системы. */
-CREATE OR REPLACE FUNCTION app_schema.delete_brand(p_brand_id INTEGER)
-RETURNS VOID AS $$
+    Она используется для удаления марки из системы. 
+*/
+CREATE OR REPLACE
+PROCEDURE app_schema.delete_brand(p_brand_id INTEGER)
+AS $$
 BEGIN
     DELETE FROM app_schema.brands 
     WHERE brand_id = p_brand_id;
@@ -607,56 +635,60 @@ $$ LANGUAGE plpgsql;
 -- Вызов: CALL app_schema.delete_brand(1);
 
 -- Процедура: app_schema.select_model(p_model_id INTEGER)
-/*  Функция: Создает запрос на выборку названия модели
-    по его идентификатору.
-    Она возвращает таблицу, содержащую название модели.
-    Она является read-only и не изменяет данные в таблице.
-    Она используется для получения названия модели
-    в других частях системы. */
-CREATE OR REPLACE FUNCTION app_schema.select_model(p_model_id INTEGER)
-RETURNS TABLE (name VARCHAR(255)) AS $$
+/*  Функция: Создает запрос на выборку названия модели по его идентификатору.
+    Она принимает идентификатор модели в качестве параметра.
+    Она используется для получения названия модели по его идентификатору.
+*/
+CREATE OR REPLACE 
+PROCEDURE app_schema.select_model(p_model_id INTEGER)
+AS $$
 BEGIN
-    RETURN QUERY 
     SELECT name 
     FROM app_schema.models 
     WHERE model_id = p_model_id;
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: SELECT * FROM app_schema.select_model(1);
+-- Вызов: CALL app_schema.select_model(1);
 
 -- Процедура: app_schema.insert_model(p_name VARCHAR(255), p_brand_id INTEGER)
 /*  Функция: Создает запрос на вставку новой модели в таблицу.
     Она принимает название модели и идентификатор марки в качестве параметров.
-    Она используется для добавления новой модели в систему. */
-CREATE OR REPLACE FUNCTION app_schema.insert_model(p_name VARCHAR(255), p_brand_id INTEGER)
-RETURNS VOID AS $$
+    Она используется для добавления новой модели в систему. 
+*/
+CREATE OR REPLACE 
+PROCEDURE app_schema.insert_model(p_name VARCHAR(255), p_brand_id INTEGER)
+AS $$
 BEGIN
     INSERT INTO app_schema.models(name, brand_id) 
     VALUES(p_name, p_brand_id);
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: CALL app_schema.insert_model('X5', 1);
+-- Вызов: CALL app_schema.insert_model('Camry', 1);
 
 -- Процедура: app_schema.update_model(p_model_id INTEGER, p_name VARCHAR(255), p_brand_id INTEGER)
 /*  Функция: Создает запрос на обновление названия модели и марки в таблице.
     Она принимает идентификатор модели, новое название и идентификатор марки в качестве параметров.
-    Она используется для обновления названия модели и марки в системе. */
-CREATE OR REPLACE FUNCTION app_schema.update_model(p_model_id INTEGER, p_name VARCHAR(255), p_brand_id INTEGER)
-RETURNS VOID AS $$
+    Она используется для обновления названия модели и марки в системе. 
+*/
+CREATE OR REPLACE 
+PROCEDURE app_schema.update_model(p_model_id INTEGER, p_name VARCHAR(255), p_brand_id INTEGER)
+AS $$
 BEGIN
     UPDATE app_schema.models 
     SET name = p_name, brand_id = p_brand_id 
     WHERE model_id = p_model_id;
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: CALL app_schema.update_model(1, 'Camry', 1);
+-- Вызов: CALL app_schema.update_model(1, 'Corolla', 1);
 
 -- Процедура: app_schema.delete_model(p_model_id INTEGER)
 /*  Функция: Создает запрос на удаление модели из таблицы.
     Она принимает идентификатор модели в качестве параметра.
-    Она используется для удаления модели из системы. */
-CREATE OR REPLACE FUNCTION app_schema.delete_model(p_model_id INTEGER)
-RETURNS VOID AS $$
+    Она используется для удаления модели из системы.
+*/
+CREATE OR REPLACE 
+PROCEDURE app_schema.delete_model(p_model_id INTEGER)
+AS $$
 BEGIN
     DELETE FROM app_schema.models 
     WHERE model_id = p_model_id;
@@ -666,27 +698,28 @@ $$ LANGUAGE plpgsql;
 
 -- Процедура: app_schema.select_user(p_user_id INTEGER)
 /*  Функция: Создает запрос на выборку email пользователя по его идентификатору.
-    Она возвращает таблицу, содержащую email пользователя.
-    Она является read-only и не изменяет данные в таблице.
-    Она используется для получения email пользователя
-    в других частях системы. */
-CREATE OR REPLACE FUNCTION user_schema.select_user(p_user_id INTEGER)
-RETURNS TABLE (email VARCHAR(255)) AS $$
+    Она принимает идентификатор пользователя в качестве параметра.
+    Она используется для получения email пользователя по его идентификатору.
+*/
+CREATE OR REPLACE 
+PROCEDURE app_schema.select_user(p_user_id INTEGER)
+AS $$
 BEGIN
-    RETURN QUERY 
     SELECT email 
-    FROM user_schema.users 
+    FROM app_schema.users 
     WHERE user_id = p_user_id;
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: SELECT * FROM user_schema.select_user(1);
+-- Вызов: CALL app_schema.select_user(1);
 
 -- Процедура: user_schema.insert_user(p_email VARCHAR(255), p_password_hash BYTEA, p_salt BYTEA)
 /*  Функция: Создает запрос на вставку нового пользователя в таблицу.
     Она принимает email пользователя, хэш пароля и соль в качестве параметров.
-    Она используется для добавления нового пользователя в систему. */
-CREATE OR REPLACE FUNCTION user_schema.insert_user(p_email VARCHAR(255), p_password_hash BYTEA, p_salt BYTEA)
-RETURNS VOID AS $$
+    Она используется для добавления нового пользователя в систему. 
+*/
+CREATE OR REPLACE
+PROCEDURE user_schema.insert_user(p_email VARCHAR(255), p_password_hash BYTEA, p_salt BYTEA)
+AS $$
 BEGIN
     INSERT INTO user_schema.users(email, password_hash, salt) 
     VALUES(p_email, p_password_hash, p_salt);
@@ -695,11 +728,13 @@ $$ LANGUAGE plpgsql;
 -- Вызов: CALL user_schema.insert_user('7Kq9E@example.com', 'password_hash', 'salt');
 
 -- Процедура: user_schema.update_user(p_user_id INTEGER, p_email VARCHAR(255), p_password_hash BYTEA, p_salt BYTEA)
-/*  Функция: Создает запрос на обновление email пользователя, хэша пароля и соли в таблице.
-    Она принимает идентификатор пользователя, новый email, новый хэш пароля и новую соль в качестве параметров.
-    Она используется для обновления данных пользователя в системе. */
-CREATE OR REPLACE FUNCTION user_schema.update_user(p_user_id INTEGER, p_email VARCHAR(255), p_password_hash BYTEA, p_salt BYTEA)
-RETURNS VOID AS $$
+/*  Функция: Создает запрос на обновление данных пользователя в таблице.
+    Она принимает идентификатор пользователя, новый email, хэш пароля и соль в качестве параметров.
+    Она используется для обновления данных пользователя в системе.
+*/
+CREATE OR REPLACE 
+PROCEDURE user_schema.update_user(p_user_id INTEGER, p_email VARCHAR(255), p_password_hash BYTEA, p_salt BYTEA)
+AS $$
 BEGIN
     UPDATE user_schema.users 
     SET email = p_email, password_hash = p_password_hash, salt = p_salt 
@@ -711,9 +746,11 @@ $$ LANGUAGE plpgsql;
 -- Процедура: user_schema.delete_user(p_user_id INTEGER)
 /*  Функция: Создает запрос на удаление пользователя из таблицы.
     Она принимает идентификатор пользователя в качестве параметра.
-    Она используется для удаления пользователя из системы. */
-CREATE OR REPLACE FUNCTION user_schema.delete_user(p_user_id INTEGER)
-RETURNS VOID AS $$
+    Она используется для удаления пользователя из системы. 
+*/
+CREATE OR REPLACE 
+PROCEDURE user_schema.delete_user(p_user_id INTEGER)
+AS $$
 BEGIN
     DELETE FROM user_schema.users 
     WHERE user_id = p_user_id;
@@ -723,54 +760,59 @@ $$ LANGUAGE plpgsql;
 
 -- Процедура: app_schema.select_client(p_client_id INTEGER)
 /*  Функция: Создает запрос на выборку данных о клиенте по его идентификатору.
-    Она возвращает таблицу, содержащую данные о клиенте.
-    Она является read-only и не изменяет данные в таблице.
-    Она используется для получения данных о клиенте
-    в других частях системы. */
-CREATE OR REPLACE FUNCTION app_schema.select_client(p_client_id INTEGER)
-RETURNS TABLE (user_id INTEGER, firstname VARCHAR(255), lastname VARCHAR(255), patronymic VARCHAR(255), birth_date DATE, city VARCHAR(255)) AS $$
+    Она принимает идентификатор клиента в качестве параметра.
+    Она используется для получения данных о клиенте по его идентификатору.
+*/
+CREATE OR REPLACE
+PROCEDURE app_schema.select_client(p_client_id INTEGER)
+AS $$
 BEGIN
-    RETURN QUERY 
-    SELECT user_id, firstname, lastname, patronymic, birth_date, city 
+    SELECT * 
     FROM app_schema.clients 
     WHERE client_id = p_client_id;
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: SELECT * FROM app_schema.select_client(1);
+-- Вызов: CALL app_schema.select_client(1);
 
--- Процедура: app_schema.insert_client(p_user_id INTEGER, p_firstname VARCHAR(255), p_lastname VARCHAR(255), p_patronymic VARCHAR(255), p_birth_date DATE, p_city VARCHAR(255))
-/*  Функция: Создает запрос на вставку нового клиента в таблицу.
-    Она принимает идентификатор пользователя, имя, фамилию и отчество клиента, дату рождения и город в качестве параметров.
-    Она используется для добавления нового клиента в систему. */
-CREATE OR REPLACE FUNCTION app_schema.insert_client(p_user_id INTEGER, p_firstname VARCHAR(255), p_lastname VARCHAR(255), p_patronymic VARCHAR(255), p_birth_date DATE, p_city VARCHAR(255))
-RETURNS VOID AS $$
+-- Процедура: app_schema.insert_client(p_user_id INTEGER, p_firstname VARCHAR(255), p_lastname VARCHAR(255), p_patronymic VARCHAR(255), p_birth_date DATE, p_city VARCHAR(255), p_phone VARCHAR(255))
+/*  Функция: Создает запрос на вставку нового клиента в таблицу. 
+    Оно принимает идентификатор пользователя, имя, фамилию, отчество, дату рождения и город в качестве параметров.
+    Она используется для добавления нового клиента в систему.
+*/
+CREATE OR REPLACE 
+PROCEDURE app_schema.insert_client(p_user_id INTEGER, p_firstname VARCHAR(255), p_lastname VARCHAR(255), p_patronymic VARCHAR(255), p_birth_date DATE, p_city VARCHAR(255), p_phone VARCHAR(255))
+AS $$
 BEGIN
-    INSERT INTO app_schema.clients(user_id, firstname, lastname, patronymic, birth_date, city) 
-    VALUES(p_user_id, p_firstname, p_lastname, p_patronymic, p_birth_date, p_city);
+    INSERT INTO app_schema.clients(user_id, firstname, lastname, patronymic, birth_date, city, phone) 
+    VALUES(p_user_id, p_firstname, p_lastname, p_patronymic, p_birth_date, p_city, p_phone);
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: CALL app_schema.insert_client(1, 'John', 'Smith', 'Petrovich', '1990-01-01', 'Saint-Petersburg');
+-- Вызов: CALL app_schema.insert_client(1, 'John', 'Smith', 'Petrovich', '1990-01-01', 'New York', '123-456-7890');
 
--- Процедура: app_schema.update_client(p_client_id INTEGER, p_user_id INTEGER, p_firstname VARCHAR(255), p_lastname VARCHAR(255), p_patronymic VARCHAR(255), p_birth_date DATE, p_city VARCHAR(255))
+-- Процедура: app_schema.update_client(p_client_id INTEGER, p_user_id INTEGER, p_firstname VARCHAR(255), p_lastname VARCHAR(255), p_patronymic VARCHAR(255), p_birth_date DATE, p_city VARCHAR(255), p_phone VARCHAR(255))
 /*  Функция: Создает запрос на обновление данных о клиенте в таблице.
-    Она принимает идентификатор клиента, идентификатор пользователя, имя, фамилию и отчество клиента, дату рождения и город в качестве параметров.
-    Она используется для обновления данных о клиенте в системе. */
-CREATE OR REPLACE FUNCTION app_schema.update_client(p_client_id INTEGER, p_user_id INTEGER, p_firstname VARCHAR(255), p_lastname VARCHAR(255), p_patronymic VARCHAR(255), p_birth_date DATE, p_city VARCHAR(255))
-RETURNS VOID AS $$
+    Она принимает идентификатор клиента, новые данные о клиенте в качестве параметров.
+    Она используется для обновления данных о клиенте в системе.
+*/
+CREATE OR REPLACE
+PROCEDURE app_schema.update_client(p_client_id INTEGER, p_user_id INTEGER, p_firstname VARCHAR(255), p_lastname VARCHAR(255), p_patronymic VARCHAR(255), p_birth_date DATE, p_city VARCHAR(255), p_phone VARCHAR(255))
+AS $$
 BEGIN
     UPDATE app_schema.clients 
-    SET user_id = p_user_id, firstname = p_firstname, lastname = p_lastname, patronymic = p_patronymic, birth_date = p_birth_date, city = p_city 
+    SET user_id = p_user_id, firstname = p_firstname, lastname = p_lastname, patronymic = p_patronymic, birth_date = p_birth_date, city = p_city, phone = p_phone 
     WHERE client_id = p_client_id;
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: CALL app_schema.update_client(1, 1, 'Frank', 'Sam', 'Petrovich', '1990-01-01', 'Saint-Petersburg');
+-- Вызов: CALL app_schema.update_client(1, 1, 'John', 'Smith', 'Petrovich', '1990-01-01', 'New York', '123-456-7890');
 
 -- Процедура: app_schema.delete_client(p_client_id INTEGER)
 /*  Функция: Создает запрос на удаление клиента из таблицы.
     Она принимает идентификатор клиента в качестве параметра.
-    Она используется для удаления клиента из системы. */
-CREATE OR REPLACE FUNCTION app_schema.delete_client(p_client_id INTEGER)
-RETURNS VOID AS $$
+    Она используется для удаления клиента из системы. 
+*/
+CREATE OR REPLACE
+PROCEDURE app_schema.delete_client(p_client_id INTEGER)
+AS $$
 BEGIN
     DELETE FROM app_schema.clients 
     WHERE client_id = p_client_id;
@@ -779,39 +821,42 @@ $$ LANGUAGE plpgsql;
 -- Вызов: CALL app_schema.delete_client(1);
 
 -- Процедура: employee_schema.select_position(p_position_id INTEGER)
-/*  Функция: Создает запрос на выборку данных о должности по его идентификатору.
+/*  Функция: Создает запрос на выборку данных о должности по ее идентификатору.
     Она принимает идентификатор должности в качестве параметра.
-    Она используется для получения данных о должности из системы. */
-CREATE OR REPLACE FUNCTION employee_schema.select_position(p_position_id INTEGER)
-RETURNS TABLE (name VARCHAR(255)) AS $$
+    Она используется для получения данных о должности по ее идентификатору. 
+*/
+CREATE OR REPLACE
+PROCEDURE employee_schema.select_position(p_position_id INTEGER)
+AS $$
 BEGIN
-    RETURN QUERY 
-    SELECT name 
+    SELECT * 
     FROM employee_schema.positions 
     WHERE position_id = p_position_id;
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: SELECT * FROM employee_schema.select_position(1);
+-- Вызов: CALL employee_schema.select_position(1);
 
 -- Процедура: employee_schema.insert_position(p_name VARCHAR(255))
 /*  Функция: Создает запрос на вставку новой должности в таблицу.
     Она принимает название должности в качестве параметра.
-    Она используется для добавления новой должности в систему. */
-CREATE OR REPLACE FUNCTION employee_schema.insert_position(p_name VARCHAR(255))
-RETURNS VOID AS $$
+    Она используется для добавления новой должности в систему. 
+*/
+CREATE OR REPLACE
+PROCEDURE employee_schema.insert_position(p_name VARCHAR(255))
+AS $$
 BEGIN
-    INSERT INTO employee_schema.positions(name) 
-    VALUES(p_name);
+    INSERT INTO employee_schema.positions(name) VALUES(p_name);
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: CALL employee_schema.insert_position('Mechanic');
+-- Вызов: CALL employee_schema.insert_position('Manager');
 
 -- Процедура: employee_schema.update_position(p_position_id INTEGER, p_name VARCHAR(255))
 /*  Функция: Создает запрос на обновление данных о должности в таблице.
-    Она принимает идентификатор должности и название должности в качестве параметров.
+    Она принимает идентификатор должности и новое название должности в качестве параметров.
     Она используется для обновления данных о должности в системе. */
-CREATE OR REPLACE FUNCTION employee_schema.update_position(p_position_id INTEGER, p_name VARCHAR(255))
-RETURNS VOID AS $$
+CREATE OR REPLACE
+PROCEDURE employee_schema.update_position(p_position_id INTEGER, p_name VARCHAR(255))
+AS $$
 BEGIN
     UPDATE employee_schema.positions 
     SET name = p_name 
@@ -823,9 +868,11 @@ $$ LANGUAGE plpgsql;
 -- Процедура: employee_schema.delete_position(p_position_id INTEGER)
 /*  Функция: Создает запрос на удаление должности из таблицы.
     Она принимает идентификатор должности в качестве параметра.
-    Она используется для удаления должности из системы. */
-CREATE OR REPLACE FUNCTION employee_schema.delete_position(p_position_id INTEGER)
-RETURNS VOID AS $$
+    Она используется для удаления должности из системы. 
+*/
+CREATE OR REPLACE
+PROCEDURE employee_schema.delete_position(p_position_id INTEGER)
+AS $$
 BEGIN
     DELETE FROM employee_schema.positions 
     WHERE position_id = p_position_id;
@@ -836,53 +883,58 @@ $$ LANGUAGE plpgsql;
 -- Процедура: employee_schema.select_employee(p_employee_id INTEGER)
 /*  Функция: Создает запрос на выборку данных о сотруднике по его идентификатору.
     Она принимает идентификатор сотрудника в качестве параметра.
-    Она используется для получения данных о сотруднике из системы. */
-CREATE OR REPLACE FUNCTION employee_schema.select_employee(p_employee_id INTEGER)
-RETURNS TABLE (user_id INTEGER, firstname VARCHAR(255), lastname VARCHAR(255), patronymic VARCHAR(255), position_id INTEGER, hired_at DATE, phone_number VARCHAR(255)) AS $$
+    Она используется для получения данных о сотруднике из системы. 
+*/
+CREATE OR REPLACE
+PROCEDURE employee_schema.select_employee(p_employee_id INTEGER)
+AS $$
 BEGIN
-    RETURN QUERY 
-    SELECT user_id, firstname, lastname, patronymic, position_id, hired_at, phone_number 
+    SELECT * 
     FROM employee_schema.employees 
     WHERE employee_id = p_employee_id;
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: SELECT * FROM employee_schema.select_employee(1);
+-- Вызов: CALL employee_schema.select_employee(1);
 
--- Процедура: employee_schema.insert_employee(p_user_id INTEGER, p_firstname VARCHAR(255), p_lastname VARCHAR(255), p_patronymic VARCHAR(255), p_position_id INTEGER, p_hired_at DATE, p_phone_number VARCHAR(255))
-/*  Функция: Создает запрос на вставку нового сотрудника в таблицу.
-    Она принимает идентификатор пользователя, имя, фамилию, отчество, идентификатор должности,
-    дату начала работы и номер телефона в качестве параметров.
-    Она используется для добавления нового сотрудника в систему. */
-CREATE OR REPLACE FUNCTION employee_schema.insert_employee(p_user_id INTEGER, p_firstname VARCHAR(255), p_lastname VARCHAR(255), p_patronymic VARCHAR(255), p_position_id INTEGER, p_hired_at DATE, p_phone_number VARCHAR(255))
-RETURNS VOID AS $$
+-- Процедура: employee_schema.insert_employee(p_user_id INTEGER, p_firstname VARCHAR(255), p_lastname VARCHAR(255), p_patronymic VARCHAR(255), p_position_id INTEGER, p_hired_at DATE, p_phone VARCHAR(255))
+/*  Функция: Создает запрос на вставку нового сотрудника в таблицу. 
+    Она принимает идентификатор пользователя, имя, фамилию и отчество, идентификатор должности, дату приема на работу и номер телефона в качестве параметров.
+    Она используется для добавления нового сотрудника в систему.
+*/
+CREATE OR REPLACE 
+PROCEDURE employee_schema.insert_employee(p_user_id INTEGER, p_firstname VARCHAR(255), p_lastname VARCHAR(255), p_patronymic VARCHAR(255), p_position_id INTEGER, p_hired_at DATE, p_phone VARCHAR(255))
+AS $$
 BEGIN
-    INSERT INTO employee_schema.employees(user_id, firstname, lastname, patronymic, position_id, hired_at, phone_number) 
-    VALUES(p_user_id, p_firstname, p_lastname, p_patronymic, p_position_id, p_hired_at, p_phone_number);
+    INSERT INTO employee_schema.employees(user_id, firstname, lastname, patronymic, position_id, hired_at, phone) 
+    VALUES(p_user_id, p_firstname, p_lastname, p_patronymic, p_position_id, p_hired_at, p_phone);
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: CALL employee_schema.insert_employee(1, 'John', 'Smith', 'Petrovich', 1, '2022-01-01', '123-45-67');
+-- Вызов: CALL employee_schema.insert_employee(1, 'John', 'Smith', 'Petrovich', 1, '2022-01-01', '123-456-7890');
 
 -- Процедура: employee_schema.update_employee(p_employee_id INTEGER, p_user_id INTEGER, p_firstname VARCHAR(255), p_lastname VARCHAR(255), p_patronymic VARCHAR(255), p_position_id INTEGER, p_hired_at DATE, p_phone_number VARCHAR(255))
-/*  Функция: Создает запрос на обновление данных о сотруднике в таблице.
-    Она принимает идентификатор сотрудника, идентификатор пользователя, имя, фамилию, отчество,
-    идентификатор должности, дату начала работы и номер телефона в качестве параметров.
-    Она используется для обновления данных о сотруднике в системе. */
-CREATE OR REPLACE FUNCTION employee_schema.update_employee(p_employee_id INTEGER, p_user_id INTEGER, p_firstname VARCHAR(255), p_lastname VARCHAR(255), p_patronymic VARCHAR(255), p_position_id INTEGER, p_hired_at DATE, p_phone_number VARCHAR(255))
-RETURNS VOID AS $$
+/*  Функция: Создает запрос на обновление данных о сотруднике в таблице. 
+    Она принимает индексатор сотрудника, юзера, имя, фамилию, отчество, должность, дату приема на работу и номер телефона в качестве параметров.
+    Она используется для обновления данных о сотруднике в системе.
+*/
+CREATE OR REPLACE 
+PROCEDURE employee_schema.update_employee(p_employee_id INTEGER, p_user_id INTEGER, p_firstname VARCHAR(255), p_lastname VARCHAR(255), p_patronymic VARCHAR(255), p_position_id INTEGER, p_hired_at DATE, p_phone_number VARCHAR(255))
+AS $$
 BEGIN
     UPDATE employee_schema.employees 
-    SET user_id = p_user_id, firstname = p_firstname, lastname = p_lastname, patronymic = p_patronymic, position_id = p_position_id, hired_at = p_hired_at, phone_number = p_phone_number 
+    SET user_id = p_user_id, firstname = p_firstname, lastname = p_lastname, patronymic = p_patronymic, position_id = p_position_id, hired_at = p_hired_at, phone = p_phone_number 
     WHERE employee_id = p_employee_id;
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: CALL employee_schema.update_employee(1, 1, 'Frank', 'Sam', 'Petrovich', 1, '2022-01-01', '123-45-67');
+-- Вызов: CALL employee_schema.update_employee(1, 1, 'John', 'Smith', 'Petrovich', 1, '2022-01-01', '123-456-7890');
 
 -- Процедура: employee_schema.delete_employee(p_employee_id INTEGER)
 /*  Функция: Создает запрос на удаление сотрудника из таблицы.
     Она принимает идентификатор сотрудника в качестве параметра.
-    Она используется для удаления сотрудника из системы. */
-CREATE OR REPLACE FUNCTION employee_schema.delete_employee(p_employee_id INTEGER)
-RETURNS VOID AS $$
+    Она используется для удаления сотрудника из системы. 
+*/
+CREATE OR REPLACE
+PROCEDURE employee_schema.delete_employee(p_employee_id INTEGER)
+AS $$
 BEGIN
     DELETE FROM employee_schema.employees 
     WHERE employee_id = p_employee_id;
@@ -893,24 +945,26 @@ $$ LANGUAGE plpgsql;
 -- Процедура: mechanic_schema.select_part(p_part_id INTEGER)
 /*  Функция: Создает запрос на выборку данных о запчасти по ее идентификатору.
     Она принимает идентификатор запчасти в качестве параметра.
-    Она используется для получения данных о запчасти из системы. */
-CREATE OR REPLACE FUNCTION mechanic_schema.select_part(p_part_id INTEGER)
-RETURNS TABLE (name VARCHAR(255), unit_price DECIMAL(10, 2), stock_qty INTEGER) AS $$
+    Она используется для получения данных о запчасти из системы. 
+*/
+CREATE OR REPLACE
+PROCEDURE mechanic_schema.select_part(p_part_id INTEGER)
+AS $$
 BEGIN
-    RETURN QUERY 
-    SELECT name, unit_price, stock_qty 
-    FROM mechanic_schema.parts
+    SELECT * FROM mechanic_schema.parts 
     WHERE part_id = p_part_id;
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: SELECT * FROM mechanic_schema.select_part(1);
+-- Вызов: CALL mechanic_schema.select_part(1);
 
 -- Процедура: mechanic_schema.insert_part(p_name VARCHAR(255), p_unit_price DECIMAL(10, 2), p_stock_qty INTEGER)
 /*  Функция: Создает запрос на добавление новой запчасти в таблицу.
     Она принимает название, цену и количество запчастей в качестве параметров.
-    Она используется для добавления новой запчасти в систему. */
-CREATE OR REPLACE FUNCTION mechanic_schema.insert_part(p_name VARCHAR(255), p_unit_price DECIMAL(10, 2), p_stock_qty INTEGER)
-RETURNS VOID AS $$
+    Она используется для добавления новой запчасти в систему. 
+*/
+CREATE OR REPLACE
+PROCEDURE mechanic_schema.insert_part(p_name VARCHAR(255), p_unit_price DECIMAL(10, 2), p_stock_qty INTEGER)
+AS $$
 BEGIN
     INSERT INTO mechanic_schema.parts(name, unit_price, stock_qty) 
     VALUES(p_name, p_unit_price, p_stock_qty);
@@ -922,8 +976,9 @@ $$ LANGUAGE plpgsql;
 /*  Функция: Создает запрос на обновление данных о запчасти в таблице.
     Она принимает идентификатор запчасти, название, цену и количество запчастей в качестве параметров.
     Она используется для обновления данных о запчасти в системе. */
-CREATE OR REPLACE FUNCTION mechanic_schema.update_part(p_part_id INTEGER, p_name VARCHAR(255), p_unit_price DECIMAL(10, 2), p_stock_qty INTEGER)
-RETURNS VOID AS $$
+CREATE OR REPLACE 
+PROCEDURE mechanic_schema.update_part(p_part_id INTEGER, p_name VARCHAR(255), p_unit_price DECIMAL(10, 2), p_stock_qty INTEGER)
+AS $$
 BEGIN
     UPDATE mechanic_schema.parts 
     SET name = p_name, unit_price = p_unit_price, stock_qty = p_stock_qty 
@@ -936,8 +991,9 @@ $$ LANGUAGE plpgsql;
 /*  Функция: Создает запрос на удаление запчасти из таблицы.
     Она принимает идентификатор запчасти в качестве параметра.
     Она используется для удаления запчасти из системы. */
-CREATE OR REPLACE FUNCTION mechanic_schema.delete_part(p_part_id INTEGER)
-RETURNS VOID AS $$
+CREATE OR REPLACE
+PROCEDURE mechanic_schema.delete_part(p_part_id INTEGER)
+AS $$
 BEGIN
     DELETE FROM mechanic_schema.parts 
     WHERE part_id = p_part_id;
@@ -949,23 +1005,23 @@ $$ LANGUAGE plpgsql;
 /*  Функция: Создает запрос на выборку данных о списке желаний по идентификатору.
     Она принимает идентификатор списка желаний в качестве параметра.
     Она используется для получения данных о списке желаний из системы. */
-CREATE OR REPLACE FUNCTION app_schema.select_wishlist(p_wishlist_id INTEGER)
-RETURNS TABLE (client_id INTEGER, model_id INTEGER, brand_id INTEGER) AS $$
+CREATE OR REPLACE
+PROCEDURE app_schema.select_wishlist(p_wishlist_id INTEGER)
+AS $$
 BEGIN
-    RETURN QUERY 
-    SELECT client_id, model_id, brand_id 
-    FROM app_schema.wishlists 
+    SELECT * FROM app_schema.wishlists 
     WHERE wishlist_id = p_wishlist_id;
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: SELECT * FROM app_schema.select_wishlist(1);
+-- Вызов: CALL app_schema.select_wishlist(1);
 
 -- Процедура: app_schema.insert_wishlist(p_client_id INTEGER, p_model_id INTEGER, p_brand_id INTEGER)
 /*  Функция: Создает запрос на добавление нового списка желаний в таблицу.
     Она принимает идентификатор клиента, идентификатор модели и идентификатор бренда в качестве параметров.
     Она используется для добавления нового списка желаний в систему. */
-CREATE OR REPLACE FUNCTION app_schema.insert_wishlist(p_client_id INTEGER, p_model_id INTEGER, p_brand_id INTEGER)
-RETURNS VOID AS $$
+CREATE OR REPLACE
+PROCEDURE app_schema.insert_wishlist(p_client_id INTEGER, p_model_id INTEGER, p_brand_id INTEGER)
+AS $$
 BEGIN
     INSERT INTO app_schema.wishlists(client_id, model_id, brand_id) 
     VALUES(p_client_id, p_model_id, p_brand_id);
@@ -974,12 +1030,13 @@ $$ LANGUAGE plpgsql;
 -- Вызов: CALL app_schema.insert_wishlist(1, 1, 1);
 
 -- Процедура: app_schema.update_wishlist(p_wishlist_id INTEGER, p_client_id INTEGER, p_model_id INTEGER, p_brand_id INTEGER)
-/*  Функция: Обновляет данные о списке желаний в таблице.
-    Она принимает идентификатор списка желаний, идентификатор клиента, 
-    идентификатор модели и идентификатор бренда в качестве параметров.
-    Она используется для обновления данных о списке желаний в системе. */
-CREATE OR REPLACE FUNCTION app_schema.update_wishlist(p_wishlist_id INTEGER, p_client_id INTEGER, p_model_id INTEGER, p_brand_id INTEGER)
-RETURNS VOID AS $$
+/*  Функция: Создает запрос на обновление данных о списке желаний в таблице.
+    Она принимает идентификатор списка желаний, идентификатор клиента, идентификатор модели и идентификатор бренда в качестве параметров.
+    Она используется для обновления данных о списке желаний в системе.
+*/
+CREATE OR REPLACE
+PROCEDURE app_schema.update_wishlist(p_wishlist_id INTEGER, p_client_id INTEGER, p_model_id INTEGER, p_brand_id INTEGER)
+AS $$
 BEGIN
     UPDATE app_schema.wishlists 
     SET client_id = p_client_id, model_id = p_model_id, brand_id = p_brand_id 
@@ -992,8 +1049,9 @@ $$ LANGUAGE plpgsql;
 /*  Функция: Удаляет список желаний из таблицы.
     Она принимает идентификатор списка желаний в качестве параметра.
     Она используется для удаления списка желаний из системы. */
-CREATE OR REPLACE FUNCTION app_schema.delete_wishlist(p_wishlist_id INTEGER)
-RETURNS VOID AS $$
+CREATE OR REPLACE
+PROCEDURE app_schema.delete_wishlist(p_wishlist_id INTEGER)
+AS $$
 BEGIN
     DELETE FROM app_schema.wishlists 
     WHERE wishlist_id = p_wishlist_id;
@@ -1005,36 +1063,37 @@ $$ LANGUAGE plpgsql;
 /*  Функция: Создает запрос на выборку данных о статусе автомобиля по идентификатору.
     Она принимает идентификатор статуса автомобиля в качестве параметра.
     Она используется для получения данных о статусе автомобиля из системы. */
-CREATE OR REPLACE FUNCTION app_schema.select_vehicle_status(p_vehicle_status_id INTEGER)
-RETURNS TABLE (name VARCHAR(255)) AS $$
+CREATE OR REPLACE
+PROCEDURE app_schema.select_vehicle_status(p_vehicle_status_id INTEGER)
+AS $$
 BEGIN
-    RETURN QUERY 
-    SELECT name 
-    FROM app_schema.vehicle_statuses 
+    SELECT * FROM app_schema.vehicle_statuses 
     WHERE vehicle_status_id = p_vehicle_status_id;
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: SELECT * FROM app_schema.select_vehicle_status(1);
+-- Вызов: CALL app_schema.select_vehicle_status(1);
 
 -- Процедура: app_schema.insert_vehicle_status(p_name VARCHAR(255))
 /*  Функция: Создает запрос на добавление нового статуса автомобиля в таблицу.
     Она принимает название статуса автомобиля в качестве параметра.
     Она используется для добавления нового статуса автомобиля в систему. */
-CREATE OR REPLACE FUNCTION app_schema.insert_vehicle_status(p_name VARCHAR(255))
-RETURNS VOID AS $$
+CREATE OR REPLACE
+PROCEDURE app_schema.insert_vehicle_status(p_name VARCHAR(255))
+AS $$
 BEGIN
     INSERT INTO app_schema.vehicle_statuses(name) 
     VALUES(p_name);
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: CALL app_schema.insert_vehicle_status('Available');
+-- Вызов: CALL app_schema.insert_vehicle_status('Not Available');
 
 -- Процедура: app_schema.update_vehicle_status(p_vehicle_status_id INTEGER, p_name VARCHAR(255))
 /*  Функция: Обновляет данные о статусе автомобиля в таблице.
     Она принимает идентификатор статуса автомобиля и название статуса в качестве параметров.
     Она используется для обновления данных о статусе автомобиля в системе. */
-CREATE OR REPLACE FUNCTION app_schema.update_vehicle_status(p_vehicle_status_id INTEGER, p_name VARCHAR(255))
-RETURNS VOID AS $$
+CREATE OR REPLACE
+PROCEDURE app_schema.update_vehicle_status(p_vehicle_status_id INTEGER, p_name VARCHAR(255))
+AS $$
 BEGIN
     UPDATE app_schema.vehicle_statuses 
     SET name = p_name 
@@ -1047,8 +1106,9 @@ $$ LANGUAGE plpgsql;
 /*  Функция: Удаляет статус автомобиля из таблицы.
     Она принимает идентификатор статуса автомобиля в качестве параметра.
     Она используется для удаления статуса автомобиля из системы. */
-CREATE OR REPLACE FUNCTION app_schema.delete_vehicle_status(p_vehicle_status_id INTEGER)
-RETURNS VOID AS $$
+CREATE OR REPLACE
+PROCEDURE app_schema.delete_vehicle_status(p_vehicle_status_id INTEGER)
+AS $$
 BEGIN
     DELETE FROM app_schema.vehicle_statuses 
     WHERE vehicle_status_id = p_vehicle_status_id;
@@ -1060,36 +1120,37 @@ $$ LANGUAGE plpgsql;
 /*  Функция: Создает запрос на выборку данных о роли пользователя по идентификатору.
     Она принимает идентификатор роли пользователя в качестве параметра.
     Она используется для получения данных о роли пользователя из системы. */
-CREATE OR REPLACE FUNCTION user_schema.select_role(p_role_id INTEGER)
-RETURNS TABLE (name VARCHAR(255)) AS $$
+CREATE OR REPLACE
+PROCEDURE app_schema.select_role(p_role_id INTEGER)
+AS $$
 BEGIN
-    RETURN QUERY 
-    SELECT name 
-    FROM user_schema.roles 
+    SELECT * FROM user_schema.roles 
     WHERE role_id = p_role_id;
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: SELECT * FROM user_schema.select_role(1);
+-- Вызов: CALL app_schema.select_role(1);
 
 -- Процедура: user_schema.insert_role(p_name VARCHAR(255))
 /*  Функция: Создает запрос на добавление новой роли пользователя в таблицу.
     Она принимает название роли пользователя в качестве параметра.
     Она используется для добавления новой роли пользователя в систему. */
-CREATE OR REPLACE FUNCTION user_schema.insert_role(p_name VARCHAR(255))
-RETURNS VOID AS $$
+CREATE OR REPLACE
+PROCEDURE user_schema.insert_role(p_name VARCHAR(255))
+AS $$
 BEGIN
     INSERT INTO user_schema.roles(name) 
     VALUES(p_name);
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: CALL user_schema.insert_role('Admin');
+-- Вызов: CALL user_schema.insert_role('User');
 
 -- Процедура: user_schema.update_role(p_role_id INTEGER, p_name VARCHAR(255))
 /*  Функция: Обновляет данные о роли пользователя в таблице.
     Она принимает идентификатор роли пользователя и название роли в качестве параметров.
     Она используется для обновления данных о роли пользователя в системе. */
-CREATE OR REPLACE FUNCTION user_schema.update_role(p_role_id INTEGER, p_name VARCHAR(255))
-RETURNS VOID AS $$
+CREATE OR REPLACE
+PROCEDURE user_schema.update_role(p_role_id INTEGER, p_name VARCHAR(255))
+AS $$
 BEGIN
     UPDATE user_schema.roles 
     SET name = p_name 
@@ -1102,8 +1163,9 @@ $$ LANGUAGE plpgsql;
 /*  Функция: Удаляет роль пользователя из таблицы.
     Она принимает идентификатор роли пользователя в качестве параметра.
     Она используется для удаления роли пользователя из системы. */
-CREATE OR REPLACE FUNCTION user_schema.delete_role(p_role_id INTEGER)
-RETURNS VOID AS $$
+CREATE OR REPLACE 
+PROCEDURE user_schema.delete_role(p_role_id INTEGER)
+AS $$
 BEGIN
     DELETE FROM user_schema.roles 
     WHERE role_id = p_role_id;
@@ -1115,23 +1177,23 @@ $$ LANGUAGE plpgsql;
 /*  Функция: Создает запрос на выборку данных о роли пользователя по идентификатору.
     Она принимает идентификатор роли пользователя в качестве параметра.
     Она используется для получения данных о роли пользователя из системы. */
-CREATE OR REPLACE FUNCTION user_schema.select_user_role(p_user_role_id INTEGER)
-RETURNS TABLE (user_id INTEGER, role_id INTEGER) AS $$
+CREATE OR REPLACE
+PROCEDURE user_schema.select_user_role(p_user_role_id INTEGER)
+AS $$
 BEGIN
-    RETURN QUERY 
-    SELECT user_id, role_id 
-    FROM user_schema.user_roles 
+    SELECT * FROM user_schema.user_roles 
     WHERE user_role_id = p_user_role_id;
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: SELECT * FROM user_schema.select_user_role(1);
+-- Вызов: CALL user_schema.select_user_role(1);
 
 -- Процедура: user_schema.insert_user_role(p_user_id INTEGER, p_role_id INTEGER)
 /*  Функция: Создает запрос на добавление новой роли пользователя в таблицу.
     Она принимает идентификатор пользователя и идентификатор роли в качестве параметров.
     Она используется для добавления новой роли пользователя в систему. */
-CREATE OR REPLACE FUNCTION user_schema.insert_user_role(p_user_id INTEGER, p_role_id INTEGER)
-RETURNS VOID AS $$
+CREATE OR REPLACE
+PROCEDURE user_schema.insert_user_role(p_user_id INTEGER, p_role_id INTEGER)
+AS $$
 BEGIN
     INSERT INTO user_schema.user_roles(user_id, role_id) 
     VALUES(p_user_id, p_role_id);
@@ -1145,8 +1207,9 @@ $$ LANGUAGE plpgsql;
     и идентификатор роли в качестве параметров.
     Эта процедура используется для изменения роли, присвоенной пользователю, 
     или для изменения пользователя, к которому применена роль. */
-CREATE OR REPLACE FUNCTION user_schema.update_user_role(p_user_role_id INTEGER, p_user_id INTEGER, p_role_id INTEGER)
-RETURNS VOID AS $$
+CREATE OR REPLACE 
+PROCEDURE user_schema.update_user_role(p_user_role_id INTEGER, p_user_id INTEGER, p_role_id INTEGER)
+AS $$
 BEGIN
     UPDATE user_schema.user_roles 
     SET user_id = p_user_id, role_id = p_role_id 
@@ -1159,10 +1222,12 @@ $$ LANGUAGE plpgsql;
 /*  Функция: Удаляет связь пользователя с ролью из таблицы user_roles.
     Она принимает идентификатор связи пользователя с ролью в качестве параметра.
     Она используется для удаления связи пользователя с ролью из системы. */
-CREATE OR REPLACE FUNCTION user_schema.delete_user_role(p_user_role_id INTEGER)
-RETURNS VOID AS $$
+CREATE OR REPLACE
+PROCEDURE user_schema.delete_user_role(p_user_role_id INTEGER)
+AS $$
 BEGIN
-    DELETE FROM user_schema.user_roles WHERE user_role_id = p_user_role_id;
+    DELETE FROM user_schema.user_roles 
+    WHERE user_role_id = p_user_role_id;
 END;
 $$ LANGUAGE plpgsql;
 -- Вызов: CALL user_schema.delete_user_role(1);
@@ -1171,52 +1236,54 @@ $$ LANGUAGE plpgsql;
 /*  Функция: Создает запрос на выборку данных о автомобиле по идентификатору.
     Она принимает идентификатор автомобиля в качестве параметра.
     Она используется для получения данных об автомобиле из система. */
-CREATE OR REPLACE FUNCTION app_schema.select_vehicle(p_vehicle_id INTEGER)
-RETURNS TABLE (vin VARCHAR(255), model_id INTEGER, brand_id INTEGER, year SMALLINT, color VARCHAR(255), mileage INTEGER, status_id INTEGER) AS $$
+CREATE OR REPLACE 
+PROCEDURE app_schema.select_vehicle(p_vehicle_id INTEGER)
+AS $$
 BEGIN
-    RETURN QUERY 
-    SELECT vin, model_id, brand_id, year, color, mileage, status_id 
-    FROM app_schema.vehicles 
+    SELECT * FROM app_schema.vehicles 
     WHERE vehicle_id = p_vehicle_id;
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: SELECT * FROM app_schema.select_vehicle(1);
+-- Вызов: CALL app_schema.select_vehicle(1);
 
 -- Процедура: app_schema.insert_vehicle(p_vin VARCHAR(255), p_model_id INTEGER, p_brand_id INTEGER, p_year SMALLINT, p_color VARCHAR(255), p_mileage INTEGER, p_status_id INTEGER)
 /*  Функция: Создает запрос на вставку нового автомобиля в таблицу.
     Она принимает VIN, идентификатор модели, идентификатор марки, год выпуска, 
     цвет, пробег и идентификатор статуса в качестве параметров.
     Она используется для добавления нового автомобиля в систему. */
-CREATE OR REPLACE FUNCTION app_schema.insert_vehicle(p_vin VARCHAR(255), p_model_id INTEGER, p_brand_id INTEGER, p_year SMALLINT, p_color VARCHAR(255), p_mileage INTEGER, p_status_id INTEGER)
-RETURNS VOID AS $$
+CREATE OR REPLACE
+PROCEDURE app_schema.insert_vehicle(p_vin VARCHAR(255), p_model_id INTEGER, p_brand_id INTEGER, p_year SMALLINT, p_color VARCHAR(255), p_mileage INTEGER, p_status_id INTEGER)
+AS $$
 BEGIN
     INSERT INTO app_schema.vehicles(vin, model_id, brand_id, year, color, mileage, status_id) 
     VALUES(p_vin, p_model_id, p_brand_id, p_year, p_color, p_mileage, p_status_id);
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: CALL app_schema.insert_vehicle('VIN123', 1, 1, 2019, 'Red', 50000, 1);
+-- Вызов: CALL app_schema.insert_vehicle('VIN123', 1, 1, 2022, 'Red', 10000, 1);
 
 -- Процедура: app_schema.update_vehicle(p_vehicle_id INTEGER, p_vin VARCHAR(255), p_model_id INTEGER, p_brand_id INTEGER, p_year SMALLINT, p_color VARCHAR(255), p_mileage INTEGER, p_status_id INTEGER)
 /*  Функция: Создает запрос на обновление данных о автомобиле в таблице.
     Она принимает идентификатор автомобиля, VIN, идентификатор модели, 
     идентификатор марки, год выпуска, цвет, пробег и идентификатор статуса в качестве параметров.
     Она используется для обновления данных об автомобиле в системе. */
-CREATE OR REPLACE FUNCTION app_schema.update_vehicle(p_vehicle_id INTEGER, p_vin VARCHAR(255), p_model_id INTEGER, p_brand_id INTEGER, p_year SMALLINT, p_color VARCHAR(255), p_mileage INTEGER, p_status_id INTEGER)
-RETURNS VOID AS $$
+CREATE OR REPLACE 
+PROCEDURE app_schema.update_vehicle(p_vehicle_id INTEGER, p_vin VARCHAR(255), p_model_id INTEGER, p_brand_id INTEGER, p_year SMALLINT, p_color VARCHAR(255), p_mileage INTEGER, p_status_id INTEGER)
+AS $$
 BEGIN
-    UPDATE app_schema.vehicles
-    SET vin = p_vin, model_id = p_model_id, brand_id = p_brand_id, year = p_year, color = p_color, mileage = p_mileage, status_id = p_status_id
+    UPDATE app_schema.vehicles 
+    SET vin = p_vin, model_id = p_model_id, brand_id = p_brand_id, year = p_year, color = p_color, mileage = p_mileage, status_id = p_status_id 
     WHERE vehicle_id = p_vehicle_id;
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: CALL app_schema.update_vehicle(1, 'VIN123', 1, 1, 2019, 'Red', 50000, 1);
+-- Вызов: CALL app_schema.update_vehicle(1, 'VIN123', 1, 1, 2022, 'Red', 10000, 1);
 
 -- Процедура: app_schema.delete_vehicle(p_vehicle_id INTEGER)
 /*  Функция: Создает запрос на удаление автомобиля из таблицы.
     Она принимает идентификатор автомобиля в качестве параметра.
     Она используется для удаления автомобиля из системы. */
-CREATE OR REPLACE FUNCTION app_schema.delete_vehicle(p_vehicle_id INTEGER)
-RETURNS VOID AS $$
+CREATE OR REPLACE
+PROCEDURE app_schema.delete_vehicle(p_vehicle_id INTEGER)
+AS $$
 BEGIN
     DELETE FROM app_schema.vehicles 
     WHERE vehicle_id = p_vehicle_id;
@@ -1228,140 +1295,545 @@ $$ LANGUAGE plpgsql;
 /*  Функция: Создает запрос на выборку данных о ремонтном заказе по идентификатору.
     Она принимает идентификатор ремонтного заказа в качестве параметра.
     Она используется для получения данных о ремонтном заказе из системы. */
-CREATE OR REPLACE FUNCTION mechanic_schema.select_repair_order(p_order_id INTEGER)
-RETURNS TABLE (order_id INTEGER, vehicle_id INTEGER, created_by INTEGER, assigned_to INTEGER) AS $$
+CREATE OR REPLACE
+PROCEDURE mechanic_schema.select_repair_order(p_order_id INTEGER)
+AS $$
 BEGIN
-    RETURN QUERY 
-    SELECT order_id, vehicle_id, created_by, assigned_to 
-    FROM mechanic_schema.repair_orders WHERE order_id = p_order_id;
+    SELECT * FROM mechanic_schema.repair_orders 
+    WHERE order_id = p_order_id;
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: SELECT * FROM mechanic_schema.select_repair_order(1);
+-- Вызов: CALL mechanic_schema.select_repair_order(1);
 
--- Процедура: mechanic_schema.insert_repair_order(p_vehicle_id INTEGER, p_created_by INTEGER, p_assigned_to INTEGER)
+-- Процедура: mechanic_schema.insert_repair_order(p_vehicle_id INTEGER, p_created_by INTEGER, p_assigned_to INTEGER, p_status_id INTEGER, p_total_cost DECIMAL)
 /*  Функция: Создает запрос на вставку нового ремонтного заказа в таблицу.
-    Она принимает идентификатор автомобиля, идентификатор создателя и идентификатора назначенного механика в качестве параметров.
+    Она принимает идентификатор автомобиля, идентификатор создателя, 
+    идентификатора назначенного механика, идентификатор статуса и общую стоимость в качестве параметров.
     Она используется для добавления нового ремонтного заказа в систему. */
-CREATE OR REPLACE FUNCTION mechanic_schema.insert_repair_order(p_vehicle_id INTEGER, p_created_by INTEGER, p_assigned_to INTEGER)
-RETURNS VOID AS $$
+CREATE OR REPLACE 
+PROCEDURE mechanic_schema.insert_repair_order(p_vehicle_id INTEGER, p_created_by INTEGER, p_assigned_to INTEGER, p_status_id INTEGER, p_total_cost DECIMAL)
+AS $$
 BEGIN
-    INSERT INTO mechanic_schema.repair_orders(vehicle_id, created_by, assigned_to) 
-    VALUES(p_vehicle_id, p_created_by, p_assigned_to);
+    INSERT INTO mechanic_schema.repair_orders(vehicle_id, created_by, assigned_to, status_id, total_cost) 
+    VALUES(p_vehicle_id, p_created_by, p_assigned_to, p_status_id, p_total_cost);
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: CALL mechanic_schema.insert_repair_order(1, 1, 1);
+-- Вызов: CALL mechanic_schema.insert_repair_order(1, 1, 1, 1, 1000);
 
 -- Процедура: mechanic_schema.update_repair_order(p_order_id INTEGER, p_vehicle_id INTEGER, p_created_by INTEGER, p_assigned_to INTEGER)
 /*  Функция: Создает запрос на обновление данных о ремонтном заказе в таблице.
     Она принимает идентификатор ремонтного заказа, идентификатор автомобиля, идентификатор создателя и идентификатора назначенного механика в качестве параметров.
     Она используется для обновления данных о ремонтном заказе в системе. */
-CREATE OR REPLACE FUNCTION mechanic_schema.update_repair_order(p_order_id INTEGER, p_vehicle_id INTEGER, p_created_by INTEGER, p_assigned_to INTEGER)
-RETURNS VOID AS $$
+CREATE OR REPLACE
+PROCEDURE mechanic_schema.update_repair_order(p_order_id INTEGER, p_vehicle_id INTEGER, p_created_by INTEGER, p_assigned_to INTEGER)
+AS $$
 BEGIN
-    UPDATE mechanic_schema.repair_orders
-    SET vehicle_id = p_vehicle_id, created_by = p_created_by, assigned_to = p_assigned_to
+    UPDATE mechanic_schema.repair_orders 
+    SET vehicle_id = p_vehicle_id, created_by = p_created_by, assigned_to = p_assigned_to 
     WHERE order_id = p_order_id;
 END;
 $$ LANGUAGE plpgsql;
 -- Вызов: CALL mechanic_schema.update_repair_order(1, 1, 1, 1);
 
--- Процедура Delete для таблицы repair_orders
-CREATE OR REPLACE FUNCTION mechanic_schema.delete_repair_order(p_order_id INTEGER)
-RETURNS VOID AS $$
+-- Процедура: mechanic_schema.delete_repair_order(p_order_id INTEGER)
+/*  Функция: Создает запрос на удаление ремонтного заказа из таблицы.
+    Она принимает идентификатор ремонтного заказа в качестве параметра.
+    Она используется для удаления ремонтного заказа из системы. */
+CREATE OR REPLACE
+PROCEDURE mechanic_schema.delete_repair_order(p_order_id INTEGER)
+AS $$
 BEGIN
-    DELETE FROM mechanic_schema.repair_orders WHERE order_id = p_order_id;
+    DELETE FROM mechanic_schema.repair_orders 
+    WHERE order_id = p_order_id;
 END;
 $$ LANGUAGE plpgsql;
 -- Вызов: CALL mechanic_schema.delete_repair_order(1);
 
--- Процедура:
-
--- Процедура Insert для таблицы repair_parts
-CREATE OR REPLACE FUNCTION mechanic_schema.insert_repair_part(p_order_id INTEGER, p_part_id INTEGER, p_quantity INTEGER, p_line_cost DECIMAL(10, 2))
-RETURNS VOID AS $$
+-- Процедура: mechanic_schema.select_repair_part(p_repair_part_id INTEGER)
+/*  Функция: Создает запрос на выборку данных о запчасти по идентификатору.
+    Она принимает идентификатор запчасти в качестве параметра.
+    Она используется для получения данных о запчасти из системы. */
+CREATE OR REPLACE
+PROCEDURE mechanic_schema.select_repair_part(p_repair_part_id INTEGER)
+AS $$
 BEGIN
-    INSERT INTO mechanic_schema.repair_parts(order_id, part_id, quantity, line_cost) VALUES(p_order_id, p_part_id, p_quantity, p_line_cost);
+    SELECT * FROM mechanic_schema.repair_parts 
+    WHERE repair_part_id = p_repair_part_id;
+END;
+$$ LANGUAGE plpgsql;
+-- Вызов: CALL mechanic_schema.select_repair_part(1);
+
+-- Процедура: mechanic_schema.insert_repair_part(p_order_id INTEGER, p_part_id INTEGER, p_quantity INTEGER, p_line_cost DECIMAL(10, 2))
+/*  Функция: Создает запрос на вставку новой запчасти в таблицу.
+    Она принимает идентификатор ремонтного заказа, идентификатор запчасти, количество и стоимость в качестве параметров.
+    Она используется для добавления новой запчасти в систему. */
+CREATE OR REPLACE
+PROCEDURE mechanic_schema.insert_repair_part(p_order_id INTEGER, p_part_id INTEGER, p_quantity INTEGER, p_line_cost DECIMAL(10, 2))
+AS $$
+BEGIN
+    INSERT INTO mechanic_schema.repair_parts(order_id, part_id, quantity, line_cost) 
+    VALUES(p_order_id, p_part_id, p_quantity, p_line_cost);
 END;
 $$ LANGUAGE plpgsql;
 -- Вызов: CALL mechanic_schema.insert_repair_part(1, 1, 1, 100.00);
 
--- Процедура Insert для таблицы vehicle_photos
-CREATE OR REPLACE FUNCTION app_schema.insert_vehicle_photo(p_vehicle_id INTEGER, p_photo_path VARCHAR(255))
-RETURNS VOID AS $$
+-- Процедура: mechanic_schema.update_repair_part(p_order_id INTEGER, p_part_id INTEGER, p_quantity INTEGER, p_line_cost DECIMAL(10, 2))
+/*  Функция: Создает запрос на обновление данных о запчасти в таблице.
+    Она принимает идентификатор ремонтного заказа, идентификатор запчасти, количество и стоимость в качестве параметров.
+    Она используется для обновления данных о запчасти в системе. */
+CREATE OR REPLACE
+PROCEDURE mechanic_schema.update_repair_part(p_repair_part_id INTEGER, p_order_id INTEGER, p_part_id INTEGER, p_quantity INTEGER, p_line_cost DECIMAL(10, 2))
+AS $$
 BEGIN
-    INSERT INTO app_schema.vehicle_photos(vehicle_id, photo_path) VALUES(p_vehicle_id, p_photo_path);
+    UPDATE mechanic_schema.repair_parts 
+    SET order_id = p_order_id, part_id = p_part_id, quantity = p_quantity, line_cost = p_line_cost 
+    WHERE repair_part_id = p_repair_part_id;
+END;
+$$ LANGUAGE plpgsql;
+-- Вызов: CALL mechanic_schema.update_repair_part(1, 1, 1, 1, 100.00);
+
+-- Процедура: mechanic_schema.delete_repair_part(p_repair_part_id INTEGER)
+/*  Функция: Создает запрос на удаление запчасти из таблицы.
+    Она принимает идентификатор запчасти в качестве параметра.
+    Она используется для удаления запчасти из системы. */
+CREATE OR REPLACE
+PROCEDURE mechanic_schema.delete_repair_part(p_repair_part_id INTEGER)
+AS $$
+BEGIN
+    DELETE FROM mechanic_schema.repair_parts 
+    WHERE repair_part_id = p_repair_part_id;
+END;
+$$ LANGUAGE plpgsql;
+-- Вызов: CALL mechanic_schema.delete_repair_part(1);
+
+-- Процедура: app_schema.select_vegicle_photo(p_photo_id INTEGER)
+/*  Функция: Создает запрос на выборку данных о фотографии автомобиля по идентификатору.
+    Она принимает идентификатор фотографии в качестве параметра.
+    Она используется для получения данных о фотографии автомобиля из системы. */
+CREATE OR REPLACE
+PROCEDURE app_schema.select_vehicle_photo(p_photo_id INTEGER)
+AS $$
+BEGIN
+    SELECT * FROM app_schema.vehicle_photos 
+    WHERE photo_id = p_photo_id;
+END;
+$$ LANGUAGE plpgsql;
+-- Вызов: CALL app_schema.select_vehicle_photo(1);
+
+-- Процедура: app_schema.insert_vehicle_photo(p_vehicle_id INTEGER, p_photo_path VARCHAR(255))
+/*  Функция: Создает запрос на вставку новой фотографии автомобиля в таблицу.    
+    Она принимает идентификатор автомобиля и путь к фотографии в качестве параметров.
+    Она используется для добавления новой фотографии автомобиля в систему. */
+CREATE OR REPLACE
+PROCEDURE app_schema.insert_vehicle_photo(p_vehicle_id INTEGER, p_photo_path VARCHAR(255))
+AS $$
+BEGIN
+    INSERT INTO app_schema.vehicle_photos(vehicle_id, photo_path) 
+    VALUES(p_vehicle_id, p_photo_path);
 END;
 $$ LANGUAGE plpgsql;
 -- Вызов: CALL app_schema.insert_vehicle_photo(1, 'path/to/photo.jpg');
 
--- Процедура Insert для таблицы test_drives
-CREATE OR REPLACE FUNCTION app_schema.insert_test_drive(p_vehicle_id INTEGER, p_client_id INTEGER, p_scheduled_by INTEGER)
-RETURNS VOID AS $$
+-- Процедура: app_schema.update_vehicle_photo(p_photo_id INTEGER, p_vehicle_id INTEGER, p_photo_path VARCHAR(255))
+/*  Функция: Создает запрос на обновление данных о фотографии автомобиля в таблице.
+    Она принимает идентификатор автомобиля и путь к новой фотографии в качестве параметров.
+    Она используется для обновления данных о фотографии автомобиля в системе. */
+CREATE OR REPLACE
+PROCEDURE app_schema.update_vehicle_photo(p_photo_id INTEGER, p_vehicle_id INTEGER, p_photo_path VARCHAR(255))
+AS $$
 BEGIN
-    INSERT INTO app_schema.test_drives(vehicle_id, client_id, scheduled_by) VALUES(p_vehicle_id, p_client_id, p_scheduled_by);
+    UPDATE app_schema.vehicle_photos 
+    SET vehicle_id = p_vehicle_id, photo_path = p_photo_path 
+    WHERE photo_id = p_photo_id;
+END;
+$$ LANGUAGE plpgsql;
+-- Вызов: CALL app_schema.update_vehicle_photo(1, 1, 'path/to/new_photo.jpg');
+
+-- Процедура: app_schema.delete_vehicle_photo(p_photo_id INTEGER)
+/*  Функция: Создает запрос на удаление фотографии автомобиля из таблицы.
+    Она принимает идентификатор фотографии в качестве параметра.
+    Она используется для удаления фотографии автомобиля из системы. */
+CREATE OR REPLACE
+PROCEDURE app_schema.delete_vehicle_photo(p_photo_id INTEGER)
+AS $$
+BEGIN
+    DELETE FROM app_schema.vehicle_photos 
+    WHERE photo_id = p_photo_id;
+END;
+$$ LANGUAGE plpgsql;
+-- Вызов: CALL app_schema.delete_vehicle_photo(1);
+
+-- Процедура: app_schema.select_test_drive(p_test_id INTEGER)
+/*  Функция: Создает запрос на выборку данных о тест-драйве по идентификатору.
+    Она принимает идентификатор тест-драйва в качестве параметра.
+    Она используется для получения данных о тест-драйве из системы. */
+CREATE OR REPLACE
+PROCEDURE app_schema.select_test_drive(p_test_id INTEGER)
+AS $$
+BEGIN
+    SELECT * FROM app_schema.test_drives 
+    WHERE test_id = p_test_id;
+END;
+$$ LANGUAGE plpgsql;
+-- Вызов: CALL app_schema.select_test_drive(1);
+
+-- Процедура: app_schema.insert_test_drive(p_vehicle_id INTEGER, p_client_id INTEGER, p_scheduled_by INTEGER)
+/*  Функция: Создает запрос на вставку нового тест-драйва в таблицу.
+    Она принимает идентификатор автомобиля, идентификатор клиента и идентификатор пользователя,
+    запланировавшего тест-драйв в качестве параметров.
+    Она используется для добавления нового тест-драйва в систему. */
+CREATE OR REPLACE
+PROCEDURE app_schema.insert_test_drive(p_vehicle_id INTEGER, p_client_id INTEGER, p_scheduled_by INTEGER)
+AS $$
+BEGIN
+    INSERT INTO app_schema.test_drives(vehicle_id, client_id, scheduled_by) 
+    VALUES(p_vehicle_id, p_client_id, p_scheduled_by);
 END;
 $$ LANGUAGE plpgsql;
 -- Вызов: CALL app_schema.insert_test_drive(1, 1, 1);
 
--- Процедура Insert для таблицы ownership_history
-CREATE OR REPLACE FUNCTION admin_schema.insert_ownership_history(p_vehicle_id INTEGER, p_client_id INTEGER, p_from_date DATE, p_to_date DATE)
-RETURNS VOID AS $$
+-- Процедура: app_schema.update_test_drive(p_test_drive_id INTEGER, p_vehicle_id INTEGER, p_client_id INTEGER, p_scheduled_by INTEGER)
+/*  Функция: Создает запрос на обновление данных о тест-драйве в таблице.
+    Она принимает идентификатор тест-драйва, идентификатор автомобиля, идентификатор клиента и идентификатор пользователя,
+    запланировавшего тест-драйв в качестве параметров.
+    Она используется для обновления данных о тест-драйве в системе. */
+CREATE OR REPLACE
+PROCEDURE app_schema.update_test_drive(p_test_drive_id INTEGER, p_vehicle_id INTEGER, p_client_id INTEGER, p_scheduled_by INTEGER)
+AS $$
 BEGIN
-    INSERT INTO admin_schema.ownership_history(vehicle_id, client_id, from_date, to_date) VALUES(p_vehicle_id, p_client_id, p_from_date, p_to_date);
+    UPDATE app_schema.test_drives 
+    SET vehicle_id = p_vehicle_id, client_id = p_client_id, scheduled_by = p_scheduled_by 
+    WHERE test_drive_id = p_test_drive_id;
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: CALL admin_schema.insert_ownership_history(1, 1, '2023-01-01', '2023-12-31');
+-- Вызов: CALL app_schema.update_test_drive(1, 1, 1, 1);
 
--- Процедура Insert для таблицы contracts_types
-CREATE OR REPLACE FUNCTION employee_schema.insert_contract_type(p_name VARCHAR(255))
+-- Процедура: app_schema.delete_test_drive(p_test_drive_id INTEGER)
+/*  Функция: Создает запрос на удаление тест-драйва из таблицы.
+    Она принимает идентификатор тест-драйва в качестве параметра.
+    Она используется для удаления тест-драйва из системы. */
+CREATE OR REPLACE
+PROCEDURE app_schema.delete_test_drive(p_test_drive_id INTEGER)
+AS $$
+BEGIN
+    DELETE FROM app_schema.test_drives 
+    WHERE test_drive_id = p_test_drive_id;
+END;
+$$ LANGUAGE plpgsql;
+-- Вызов: CALL app_schema.delete_test_drive(1);
+
+-- Процедура: admin_schema.select_ownership_history(p_vehicle_id INTEGER)
+/*  Функция: Создает запрос на выборку истории владения автомобилем из таблицы.
+    Она принимает идентификатор автомобиля в качестве параметра.
+    Она используется для получения истории владения автомобилем из системы. */
+CREATE OR REPLACE
+PROCEDURE admin_schema.select_ownership_history(p_vehicle_id INTEGER)
+AS $$
+BEGIN
+    SELECT * FROM admin_schema.ownership_history 
+    WHERE vehicle_id = p_vehicle_id;
+END;
+$$ LANGUAGE plpgsql;
+-- Вызов: CALL admin_schema.select_ownership_history(1);
+
+-- Процедура: admin_schema.insert_ownership_history(p_vehicle_id INTEGER, p_client_id INTEGER, p_from_date DATE)
+/*  Функция: Создает запрос на вставку новой записи о владении автомобилем в таблицу.
+    Оно принимает идентификатор автомобиля, идентификатор клиента и даты начала и окончания владения в качестве параметров.
+    Она используется для добавления новой записи о владении автомобилем в систему. */
+CREATE OR REPLACE FUNCTION admin_schema.insert_ownership_history(p_vehicle_id INTEGER, p_client_id INTEGER, p_from_date DATE)
 RETURNS VOID AS $$
 BEGIN
-    INSERT INTO employee_schema.contract_types(name) VALUES(p_name);
+    INSERT INTO admin_schema.ownership_history(vehicle_id, client_id, from_date) 
+    VALUES(p_vehicle_id, p_client_id, p_from_date);
+END;
+$$ LANGUAGE plpgsql;
+-- Вызов: CALL admin_schema.insert_ownership_history(1, 1, '2023-01-01');
+
+-- Процедура: admin_schema.update_ownership_history(p_contract_id INTEGER, p_vehicle_id INTEGER, p_client_id INTEGER, p_from_date DATE)
+/*  Функция: Создает запрос на обновление данных о владении автомобилем в таблице.
+    Она принимает идентификатор автомобиля, идентификатор клиента и даты начала и окончания владения в качестве параметров.
+    Она используется для обновления данных о владении автомобилем в системе. */
+CREATE OR REPLACE FUNCTION admin_schema.update_ownership_history(p_contract_id INTEGER, p_vehicle_id INTEGER, p_client_id INTEGER, p_from_date DATE)
+RETURNS VOID AS $$
+BEGIN
+    UPDATE admin_schema.ownership_history 
+    SET vehicle_id = p_vehicle_id, client_id = p_client_id, from_date = p_from_date 
+    WHERE contract_id = p_contract_id;
+END;
+$$ LANGUAGE plpgsql;
+-- Вызов: CALL admin_schema.update_ownership_history(1, 1, 1, '2023-01-01');
+
+
+-- Процедура: admin_schema.delete_ownership_history(p_vehicle_id INTEGER)
+/*  Функция: Создает запрос на удаление данных о владении автомобилем из таблицы.
+    Она принимает идентификатор автомобиля в качестве параметра.
+    Она используется для удаления данных о владении автомобилем из системы. */
+CREATE OR REPLACE
+PROCEDURE admin_schema.delete_ownership_history(p_vehicle_id INTEGER)
+AS $$
+BEGIN
+    DELETE FROM admin_schema.ownership_history 
+    WHERE vehicle_id = p_vehicle_id;
+END;
+$$ LANGUAGE plpgsql;
+-- Вызов: CALL admin_schema.delete_ownership_history(1);
+
+-- Процедура: employee_schema.select_contract_type(p_contract_type_id INTEGER)
+/*  Функция: Создает запрос на выборку типа контракта из таблицы.
+    Она принимает идентификатор типа контракта в качестве параметра.
+    Она используется для получения типа контракта из системы. */
+CREATE OR REPLACE
+PROCEDURE employee_schema.select_contract_type(p_contract_type_id INTEGER)
+AS $$
+BEGIN
+    SELECT * FROM employee_schema.contract_types 
+    WHERE contract_type_id = p_contract_type_id;
+END;
+$$ LANGUAGE plpgsql;
+-- Вызов: CALL employee_schema.select_contract_type(1);
+
+-- Процедура: employee_schema.insert_contract_type(p_name VARCHAR(255))
+/*  Функция: Создает запрос на вставку нового типа контракта в таблицу.
+    Она принимает название типа контракта в качестве параметра.
+    Она используется для добавления нового типа контракта в систему. */
+CREATE OR REPLACE
+PROCEDURE employee_schema.insert_contract_type(p_name VARCHAR(255))
+AS $$
+BEGIN
+    INSERT INTO employee_schema.contract_types(name) 
+    VALUES(p_name);
 END;
 $$ LANGUAGE plpgsql;
 -- Вызов: CALL employee_schema.insert_contract_type('Lease');
 
--- Процедура Insert для таблицы payment_types
-CREATE OR REPLACE FUNCTION employee_schema.insert_payment_type(p_name VARCHAR(255))
-RETURNS VOID AS $$
+-- Процедура: employee_schema.update_contract_type(p_contract_type_id INTEGER, p_name VARCHAR(255))
+/*  Функция: Создает запрос на обновление типа контракта в таблице.
+    Она принимает идентификатор типа контракта и название в качестве параметров.
+    Она используется для обновления типа контракта в системе. */
+CREATE OR REPLACE
+PROCEDURE employee_schema.update_contract_type(p_contract_type_id INTEGER, p_name VARCHAR(255))
+AS $$
 BEGIN
-    INSERT INTO employee_schema.payment_types(name) VALUES(p_name);
+    UPDATE employee_schema.contract_types 
+    SET name = p_name 
+    WHERE contract_type_id = p_contract_type_id;
+END;
+$$ LANGUAGE plpgsql;
+-- Вызов: CALL employee_schema.update_contract_type(1, 'Lease');
+
+-- Процедура: employee_schema.delete_contract_type(p_contract_type_id INTEGER)
+/*  Функция: Создает запрос на удаление типа контракта из таблицы.
+    Она принимает идентификатор типа контракта в качестве параметра.
+    Она используется для удаления типа контракта из системы. */
+CREATE OR REPLACE 
+PROCEDURE employee_schema.delete_contract_type(p_contract_type_id INTEGER)
+AS $$
+BEGIN
+    DELETE FROM employee_schema.contract_types 
+    WHERE contract_type_id = p_contract_type_id;
+END;
+$$ LANGUAGE plpgsql;
+-- Вызов: CALL employee_schema.delete_contract_type(1);
+
+-- Процедура: employee_schema.select_payment_type(p_payment_type_id INTEGER)
+/*  Функция: Создает запрос на выборку типа оплаты из таблицы.
+    Она принимает идентификатор типа оплаты в качестве параметра.
+    Она используется для получения типа оплаты из системы. */
+CREATE OR REPLACE
+PROCEDURE employee_schema.select_payment_type(p_payment_type_id INTEGER)
+AS $$
+BEGIN
+    SELECT * FROM employee_schema.payment_types 
+    WHERE payment_id = p_payment_type_id;
+END;
+$$ LANGUAGE plpgsql;
+-- Вызов: CALL employee_schema.select_payment_type(1);
+
+
+-- Процедура: employee_schema.insert_payment_type(p_name VARCHAR(255))
+/*  Функция: Создает запрос на вставку нового типа оплаты в таблицу.
+    Она принимает название типа оплаты в качестве параметра.
+    Она используется для добавления нового типа оплаты в систему. */
+CREATE OR REPLACE
+PROCEDURE employee_schema.insert_payment_type(p_name VARCHAR(255))
+AS $$
+BEGIN
+    INSERT INTO employee_schema.payment_types(name) 
+    VALUES(p_name);
 END;
 $$ LANGUAGE plpgsql;
 -- Вызов: CALL employee_schema.insert_payment_type('Cash');
 
-CREATE TABLE IF NOT EXISTS employee_schema.contracts
-(
-    contract_id SERIAL PRIMARY KEY,
-    vehicle_id INTEGER NOT NULL,
-    client_id INTEGER NOT NULL,
-    employee_id INTEGER NOT NULL,
-    type_id INTEGER NOT NULL,
-    payment_id INTEGER NOT NULL,
-    contract_date DATE NOT NULL,
-    total_price DECIMAL(10, 2) NOT NULL,
-
-    FOREIGN KEY (vehicle_id) REFERENCES app_schema.vehicles(vehicle_id),
-    FOREIGN KEY (client_id) REFERENCES app_schema.clients(client_id),
-    FOREIGN KEY (employee_id) REFERENCES employee_schema.employees(employee_id),
-    FOREIGN KEY (type_id) REFERENCES employee_schema.contract_types(type_contract_id),
-    FOREIGN KEY (payment_id) REFERENCES employee_schema.payment_types(payment_id)  
-);
-
--- Процедура Insert для таблицы payments
-CREATE OR REPLACE FUNCTION employee_schema.insert_payment(p_contract_id INTEGER, p_payment_date DATE, p_amount DECIMAL(10, 2))
-RETURNS VOID AS $$
+-- Процедура: employee_schema.update_payment_type(p_payment_type_id INTEGER, p_name VARCHAR(255))
+/*  Функция: Создает запрос на обновление типа оплаты в таблице.
+    Она принимает идентификатор типа оплаты и название в качестве параметров.
+    Она используется для обновления типа оплаты в системе. */
+CREATE OR REPLACE
+PROCEDURE employee_schema.update_payment_type(p_payment_type_id INTEGER, p_name VARCHAR(255))
+AS $$
 BEGIN
-    INSERT INTO employee_schema.payments(contract_id, payment_date, amount) VALUES(p_contract_id, p_payment_date, p_amount);
+    UPDATE employee_schema.payment_types 
+    SET name = p_name 
+    WHERE payment_id = p_payment_type_id;
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: CALL employee_schema.insert_payment(1, '2023-01-01', 1000.00);
+-- Вызов: CALL employee_schema.update_payment_type(1, 'Cash');
 
--- Процедура Insert для таблицы passports
-CREATE OR REPLACE FUNCTION user_schema.insert_passport(p_client_id INTEGER, p_series VARCHAR(255), p_number VARCHAR(255), p_issued_by VARCHAR(255), p_issued_date DATE)
-RETURNS VOID AS $$
+-- Процедура: employee_schema.delete_payment_type(p_payment_type_id INTEGER)
+/*  Функция: Создает запрос на удаление типа оплаты из таблицы.
+    Она принимает идентификатор типа оплаты в качестве параметра.
+    Она используется для удаления типа оплаты из системы. */
+CREATE OR REPLACE
+PROCEDURE employee_schema.delete_payment_type(p_payment_type_id INTEGER)
+AS $$
 BEGIN
-    INSERT INTO user_schema.passports(client_id, series, number, issued_by, issued_date) VALUES(p_client_id, p_series, p_number, p_issued_by, p_issued_date);
+    DELETE FROM employee_schema.payment_types 
+    WHERE payment_id = p_payment_type_id;
 END;
 $$ LANGUAGE plpgsql;
--- Вызов: CALL user_schema.insert_passport(1, 'AB', '123456', 'Issuer', '2023-01-01');
+-- Вызов: CALL employee_schema.delete_payment_type(1);
+
+-- Процедура: employee_schema.select_contract(p_contract_id INTEGER)
+/*  Функция: Создает запрос на выборку контракта из таблицы.
+    Она принимает идентификатор контракта в качестве параметра.
+    Она используется для получения контракта из системы. */
+CREATE OR REPLACE
+PROCEDURE employee_schema.select_contract(p_contract_id INTEGER)
+AS $$
+BEGIN
+    SELECT * FROM employee_schema.contracts 
+    WHERE contract_id = p_contract_id;
+END;
+$$ LANGUAGE plpgsql;
+-- Вызов: CALL employee_schema.select_contract(1);
+
+-- Процедура: employee_schema.insert_contract(p_vehicle_id INTEGER, p_client_id INTEGER, p_employee_id INTEGER, p_contract_type_id INTEGER, p_payment_type_id INTEGER, p_history_id INTEGER, p_total_price DECIMAL(10, 2))
+/*  Функция: Создает запрос на вставку нового контракта в таблицу.
+    Она принимает идентификатор автомобиля, идентификатор клиента, идентификатор сотрудника, идентификатор типа контракта, идентификатор типа оплаты, идентификатор истории в качестве параметров.
+    Она используется для добавления нового контракта в систему. */
+CREATE OR REPLACE
+PROCEDURE employee_schema.insert_contract(p_vehicle_id INTEGER, p_client_id INTEGER, p_employee_id INTEGER, p_contract_type_id INTEGER, p_payment_type_id INTEGER, p_history_id INTEGER, p_total_price DECIMAL(10, 2))
+AS $$
+BEGIN
+    INSERT INTO employee_schema.contracts(vehicle_id, client_id, employee_id, contract_type_id, payment_type_id, history_id, total_price) 
+    VALUES(p_vehicle_id, p_client_id, p_employee_id, p_contract_type_id, p_payment_type_id, p_history_id, p_total_price);
+END;
+$$ LANGUAGE plpgsql;
+-- Вызов: CALL employee_schema.insert_contract(1, 1, 1, 1, 1, 1, 1);
+
+-- Процедура: employee_schema.update_contract(p_contract_id INTEGER, p_vehicle_id INTEGER, p_client_id INTEGER, p_employee_id INTEGER, p_contract_type_id INTEGER, p_payment_type_id INTEGER, p_history_id INTEGER, p_total_price DECIMAL(10, 2))
+/*  Функция: Создает запрос на обновление контракта в таблице.
+    Она принимает идентификатор контракта и все параметры в качестве параметров.
+    Она используется для обновления контракта в системе. */
+CREATE OR REPLACE
+PROCEDURE employee_schema.update_contract(p_contract_id INTEGER, p_vehicle_id INTEGER, p_client_id INTEGER, p_employee_id INTEGER, p_contract_type_id INTEGER, p_payment_type_id INTEGER, p_history_id INTEGER, p_total_price DECIMAL(10, 2))
+AS $$
+BEGIN
+    UPDATE employee_schema.contracts
+    SET 
+        vehicle_id = p_vehicle_id,
+        client_id = p_client_id,
+        employee_id = p_employee_id,
+        contract_type_id = p_contract_type_id,
+        payment_type_id = p_payment_type_id,
+        history_id = p_history_id,
+        total_price = p_total_price
+    WHERE contract_id = p_contract_id;
+END;
+$$ LANGUAGE plpgsql;
+-- Вызов: CALL employee_schema.update_contract(1, 1, 1, 1, 1, 1, 1, 1);
+
+-- Процедура: employee_schema.delete_contract(p_contract_id INTEGER)
+/*  Функция: Создает запрос на удаление контракта из таблицы.
+    Она принимает идентификатор контракта в качестве параметра.
+    Она используется для удаления контракта из системы. */
+CREATE OR REPLACE
+PROCEDURE employee_schema.delete_contract(p_contract_id INTEGER)
+AS $$
+BEGIN
+    DELETE FROM employee_schema.contracts 
+    WHERE contract_id = p_contract_id;
+END;
+$$ LANGUAGE plpgsql;
+-- Вызов: CALL employee_schema.delete_contract(1);
+
+-- Процедура: user_schema.select_passport(p_passport_id INTEGER)
+/*  Функция: Создает запрос на выборку паспорта из таблицы.
+    Она принимает идентификатор паспорта в качестве параметра.
+    Она используется для получения информации о паспорте. */
+CREATE OR REPLACE
+PROCEDURE user_schema.select_passport(p_passport_id INTEGER)
+AS $$
+BEGIN
+    SELECT * FROM user_schema.passports WHERE passport_id = p_passport_id;
+END;
+$$ LANGUAGE plpgsql;
+-- Вызов: CALL user_schema.select_passport(1);
+
+-- Процедура: employee_schema.insert_passport(p_client_id INTEGER, p_series VARCHAR(255), p_number VARCHAR(255), p_issued_by VARCHAR(255), p_issued_date DATE)  
+/*  Функция: Создает запрос на вставку нового паспорта в таблицу.
+    Она принимает идентификатор клиента, серию, номер и дату выдачи в качестве параметров.
+    Она используется для добавления нового паспорта в систему. */
+CREATE OR REPLACE
+PROCEDURE employee_schema.insert_passport(p_client_id INTEGER, p_series VARCHAR(255), p_number VARCHAR(255), p_issued_by VARCHAR(255), p_issued_date DATE)
+AS $$
+BEGIN
+    INSERT INTO employee_schema.passports(client_id, series, number, issued_by, issued_date) 
+    VALUES(p_client_id, p_series, p_number, p_issued_by, p_issued_date);
+END;
+$$ LANGUAGE plpgsql;
+-- Вызов: CALL employee_schema.insert_passport(1, 'A123456789', '1234567890', 'Government', '2022-01-01');
+
+-- Процедура: employee_schema.update_passport(p_passport_id INTEGER, p_client_id INTEGER, p_series VARCHAR(255), p_number VARCHAR(255), p_issued_by VARCHAR(255), p_issued_date DATE)
+/*  Функция: Создает запрос на обновление паспорта в таблице.
+    Она принимает идентификатор паспорта и все параметры в качестве параметров.
+    Она используется для обновления паспорта в системе. */
+CREATE OR REPLACE
+PROCEDURE employee_schema.update_passport(p_passport_id INTEGER, p_client_id INTEGER, p_series VARCHAR(255), p_number VARCHAR(255), p_issued_by VARCHAR(255), p_issued_date DATE)
+AS $$
+BEGIN
+    UPDATE employee_schema.passports
+    SET 
+        client_id = p_client_id,
+        series = p_series,
+        number = p_number,
+        issued_by = p_issued_by,
+        issued_date = p_issued_date
+    WHERE passport_id = p_passport_id;
+END;
+$$ LANGUAGE plpgsql;
+-- Вызов: CALL employee_schema.update_passport(1, 1, 'A123456789', '1234567890', 'Government', '2022-01-01');
+
+-- Процедура: employee_schema.delete_passport(p_passport_id INTEGER)
+/*  Функция: Создает запрос на удаление паспорта из таблицы.
+    Она принимает идентификатор паспорта в качестве параметра.
+    Она используется для удаления паспорта из системы. */
+CREATE OR REPLACE
+PROCEDURE employee_schema.delete_passport(p_passport_id INTEGER)
+AS $$
+BEGIN
+    DELETE FROM employee_schema.passports 
+    WHERE passport_id = p_passport_id;
+END;
+$$ LANGUAGE plpgsql;
+-- Вызов: CALL employee_schema.delete_passport(1);
+
+CREATE OR REPLACE
+PROCEDURE app_schema.register_user(p_email VARCHAR(255), p_password VARCHAR(255), p_salt VARCHAR(255), p_first_name VARCHAR(255), p_last_name VARCHAR(255), p_patronymic VARCHAR(255), p_birthday DATE, p_phone_number VARCHAR(255))
+AS $$
+BEGIN
+    INSERT INTO user_schema.users(email, password_hash, salt) 
+    VALUES(p_email, crypt(p_password || 'salt', 'salt'), p_salt);
+    INSERT INTO app_schema.clients(email, first_name, last_name, patronymic, birthday, phone_number) 
+    VALUES(p_email, p_first_name, p_last_name, p_patronymic, p_birthday, p_phone_number);
+END;
+$$ LANGUAGE plpgsql;
+
+-- Процедура: app_schema.authenticate_user(p_email VARCHAR(255), p_password VARCHAR(255))
+CREATE OR REPLACE
+PROCEDURE app_schema.authenticate_user(p_email VARCHAR(255), p_password VARCHAR(255))
+AS $$
+BEGIN
+    SELECT * FROM user_schema.users WHERE email = p_email AND password_hash = crypt(p_password || 'salt', 'salt');
+END;
+$$ LANGUAGE plpgsql;
