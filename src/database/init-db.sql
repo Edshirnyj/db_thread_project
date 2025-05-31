@@ -116,8 +116,7 @@ CREATE TABLE IF NOT EXISTS user_schema.users
 (
     user_id SERIAL PRIMARY KEY,
     email VARCHAR(255) NOT NULL,
-    password_hash BYTEA NOT NULL,
-    salt BYTEA NOT NULL,
+    password_hash BYTEA NOT NULL
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -712,35 +711,50 @@ END;
 $$ LANGUAGE plpgsql;
 -- Вызов: CALL app_schema.select_user(1);
 
--- Процедура: user_schema.insert_user(p_email VARCHAR(255), p_password_hash BYTEA, p_salt BYTEA)
 /*  Функция: Создает запрос на вставку нового пользователя в таблицу.
     Она принимает email пользователя, хэш пароля и соль в качестве параметров.
     Она используется для добавления нового пользователя в систему. 
 */
-CREATE OR REPLACE
-PROCEDURE user_schema.insert_user(p_email VARCHAR(255), p_password_hash BYTEA, p_salt BYTEA)
-AS $$
+CREATE OR REPLACE PROCEDURE user_schema.insert_user(
+    p_email VARCHAR(255), 
+    p_password VARCHAR(255)
+) 
+LANGUAGE plpgsql AS $$
 BEGIN
-    INSERT INTO user_schema.users(email, password_hash, salt) 
-    VALUES(p_email, p_password_hash, p_salt);
+    -- Хешируем пароль перед вставкой
+    INSERT INTO user_schema.users(email, password_hash) 
+    VALUES (p_email, crypt(p_password, gen_salt('bf')));
 END;
-$$ LANGUAGE plpgsql;
+$$;
 -- Вызов: CALL user_schema.insert_user('7Kq9E@example.com', 'password_hash', 'salt');
 
--- Процедура: user_schema.update_user(p_user_id INTEGER, p_email VARCHAR(255), p_password_hash BYTEA, p_salt BYTEA)
 /*  Функция: Создает запрос на обновление данных пользователя в таблице.
     Она принимает идентификатор пользователя, новый email, хэш пароля и соль в качестве параметров.
     Она используется для обновления данных пользователя в системе.
 */
-CREATE OR REPLACE 
-PROCEDURE user_schema.update_user(p_user_id INTEGER, p_email VARCHAR(255), p_password_hash BYTEA, p_salt BYTEA)
-AS $$
+CREATE OR REPLACE PROCEDURE user_schema.update_user(
+    p_user_id INTEGER, 
+    p_email VARCHAR(255), 
+    p_password VARCHAR(255)
+) 
+LANGUAGE plpgsql AS $$
+DECLARE
+    v_user_exists BOOLEAN;
 BEGIN
+    -- Проверяем, существует ли пользователь
+    SELECT EXISTS (SELECT 1 FROM user_schema.users WHERE user_id = p_user_id) INTO v_user_exists;
+    
+    IF NOT v_user_exists THEN
+        RAISE EXCEPTION 'User ID % not found', p_user_id;
+    END IF;
+
+    -- Обновляем данные и хешируем новый пароль
     UPDATE user_schema.users 
-    SET email = p_email, password_hash = p_password_hash, salt = p_salt 
+    SET email = p_email, password_hash = crypt(p_password, gen_salt('bf'))
     WHERE user_id = p_user_id;
 END;
-$$ LANGUAGE plpgsql;
+$$;
+
 -- Вызов: CALL user_schema.update_user(1, '7Kq9E@example.com', 'password_hash', 'salt');
 
 -- Процедура: user_schema.delete_user(p_user_id INTEGER)
@@ -1818,22 +1832,105 @@ END;
 $$ LANGUAGE plpgsql;
 -- Вызов: CALL employee_schema.delete_passport(1);
 
+-- Процедура: app_schema.register_user(p_email VARCHAR(255), p_password VARCHAR(255))
 CREATE OR REPLACE
-PROCEDURE app_schema.register_user(p_email VARCHAR(255), p_password VARCHAR(255), p_salt VARCHAR(255), p_first_name VARCHAR(255), p_last_name VARCHAR(255), p_patronymic VARCHAR(255), p_birthday DATE, p_phone_number VARCHAR(255))
+PROCEDURE app_schema.register_user(p_email VARCHAR(255), p_password VARCHAR(255))
 AS $$
+DECLARE
+    v_salt BYTEA := gen_salt('bf');
 BEGIN
-    INSERT INTO user_schema.users(email, password_hash, salt) 
-    VALUES(p_email, crypt(p_password || 'salt', 'salt'), p_salt);
-    INSERT INTO app_schema.clients(email, first_name, last_name, patronymic, birthday, phone_number) 
-    VALUES(p_email, p_first_name, p_last_name, p_patronymic, p_birthday, p_phone_number);
+    INSERT INTO user_schema.users(email, password_hash) 
+    VALUES(p_email, crypt(p_password, v_salt));
 END;
 $$ LANGUAGE plpgsql;
+-- Вызов: CALL app_schema.register_user('7Kq9E@example.com', 'password_hash');
 
 -- Процедура: app_schema.authenticate_user(p_email VARCHAR(255), p_password VARCHAR(255))
 CREATE OR REPLACE
 PROCEDURE app_schema.authenticate_user(p_email VARCHAR(255), p_password VARCHAR(255))
 AS $$
+DECLARE
+    v_password_hash BYTEA;
 BEGIN
-    SELECT * FROM user_schema.users WHERE email = p_email AND password_hash = crypt(p_password || 'salt', 'salt');
+    SELECT password_hash INTO v_password_hash FROM user_schema.users WHERE email = p_email;
+    IF v_password_hash = crypt(p_password, v_password_hash) THEN
+        SELECT * FROM user_schema.users WHERE email = p_email;
+    END IF;
 END;
 $$ LANGUAGE plpgsql;
+-- Вызов: CALL app_schema.authenticate_user('7Kq9E@example.com', 'password_hash');
+
+-- Процедура: app_schema.update_user_profile(p_user_id INTEGER, p_email VARCHAR(255), p_password VARCHAR(255))
+CREATE OR REPLACE
+PROCEDURE app_schema.update_user_profile(p_user_id INTEGER, p_email VARCHAR(255), p_password VARCHAR(255))
+AS $$
+DECLARE
+    v_user_exists BOOLEAN;
+BEGIN
+    SELECT EXISTS (SELECT 1 FROM user_schema.users WHERE user_id = p_user_id) INTO v_user_exists;
+    
+    IF NOT v_user_exists THEN
+        RAISE EXCEPTION 'User ID % not found', p_user_id;
+    END IF;
+
+    UPDATE user_schema.users 
+    SET email = p_email, password_hash = crypt(p_password, gen_salt('bf'))
+    WHERE user_id = p_user_id;
+END;
+$$ LANGUAGE plpgsql;
+-- Вызов: CALL app_schema.update_user_profile(1, '7Kq9E@example.com', 'password_hash');
+
+-- Процедура: AssignUserRole(userId, newRoleId)
+CREATE OR REPLACE
+PROCEDURE employee_schema.assign_user_role(p_user_id INTEGER, p_role_id INTEGER)
+AS $$
+BEGIN
+    INSERT INTO user_schema.roles(user_id, role_id)
+    VALUES (p_user_id, p_role_id);
+END;
+$$ LANGUAGE plpgsql;
+-- Вызов: CALL employee_schema.assign_user_role(1, 1);
+
+-- Процедура: RemoveUserRole(userId, roleId)
+CREATE OR REPLACE
+PROCEDURE employee_schema.remove_user_role(p_user_id INTEGER, p_role_id INTEGER)
+AS $$
+BEGIN
+    DELETE FROM user_schema.roles
+    WHERE user_id = p_user_id AND role_id = p_role_id;
+END;
+$$ LANGUAGE plpgsql;
+-- Вызов: CALL employee_schema.remove_user_role(1, 1);
+
+-- Функция: admin_schema.get_sale_statistics()
+CREATE OR REPLACE
+FUNCTION admin_schema.get_sale_statistics()
+RETURNS TABLE (type_contract VARCHAR(255), total DECIMAL(10, 2)) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        (CASE type_id WHEN 1 THEN 'purchase' WHEN 2 THEN 'sale' END) AS type_contract,
+        SUM(total_price) AS total
+    FROM employee_schema.contracts
+    GROUP BY type_id;
+END;
+$$ LANGUAGE plpgsql;
+-- Вызов: SELECT * FROM admin_schema.get_sale_statistics();
+
+-- Функция: admin_schema.log_user_actions()
+CREATE OR REPLACE
+FUNCTION admin_schema.log_user_actions()
+RETURNS TABLE (user_id INTEGER, action_type VARCHAR(255)) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT user_id, (CASE WHEN inserted THEN 'inserted' WHEN updated THEN 'updated' WHEN deleted THEN 'deleted' END) AS action_type
+    FROM user_schema.users_log;
+END;
+$$ LANGUAGE plpgsql;
+-- Вызов: SELECT * FROM admin_schema.log_user_actions();
+
+-- Триггер: tr_log_user_actions
+CREATE TRIGGER tr_log_user_actions
+AFTER INSERT OR UPDATE OR DELETE ON user_schema.users
+FOR EACH ROW
+EXECUTE FUNCTION admin_schema.log_user_actions();
